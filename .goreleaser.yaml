@@ -50,6 +50,10 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
+# No Docker images; otherwise publishing writes an empty dist/digests.txt.
+docker_digest:
+  disable: true
+
 snapshot:
   # Dry runs set GORELEASER_CURRENT_TAG so snapshots use the release naming path.
   version_template: "{{ .Version }}"
