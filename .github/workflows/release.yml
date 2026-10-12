@@ -1,0 +1,127 @@
+name: Release
+# Release pipeline: v* tag on main -> full checks -> draft with every asset ->
+# contract check, provenance and draft read-back -> publish (immutable afterwards).
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    name: Validate tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: tag
+        name: Require vMAJOR.MINOR.PATCH[-rc.N] on a commit in main
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]]; then
+            echo "::error::Tag $TAG does not match vMAJOR.MINOR.PATCH[-rc.N]"
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse --verify --quiet refs/remotes/origin/main >/dev/null
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            echo "::error::Tag $TAG points to $GITHUB_SHA, which is not in origin/main"
+            exit 1
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          if [[ "$TAG" == *-rc.* ]]; then prerelease=true; else prerelease=false; fi
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+  checks:
+    name: Checks
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+  publish:
+    name: Publish release
+    needs: [validate, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.validate.outputs.version }}
+      PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+      GORELEASER_VERSION: 2.18.3
+      GORELEASER_SHA256: b8dee4728bca1aba0d71a832a17cd0a3799f75372878e7ffa36aef2343bce0bc
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install GoReleaser
+        run: |
+          archive=goreleaser_Linux_x86_64.tar.gz
+          curl --fail --silent --show-error --location --output "$RUNNER_TEMP/$archive" \
+            "https://github.com/goreleaser/goreleaser/releases/download/v${GORELEASER_VERSION}/$archive"
+          printf '%s  %s\n' "$GORELEASER_SHA256" "$RUNNER_TEMP/$archive" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" goreleaser
+          "$RUNNER_TEMP/goreleaser" --version | grep -Eq "^GitVersion:[[:space:]]+${GORELEASER_VERSION}$"
+      - name: Refuse to modify a published release
+        run: |
+          if draft=$(gh release view "$TAG" --json isDraft --jq .isDraft 2>"$RUNNER_TEMP/view.err"); then
+            if [ "$draft" != true ]; then
+              echo "::error::Release $TAG is already published; published assets are immutable"
+              exit 1
+            fi
+          elif ! grep -q 'release not found' "$RUNNER_TEMP/view.err"; then
+            cat "$RUNNER_TEMP/view.err" >&2
+            exit 1
+          fi
+      - name: Build and upload draft release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+        run: '"$RUNNER_TEMP/goreleaser" release --clean'
+      - name: Validate release contract
+        run: python3 scripts/check_release_artifacts.py --dist dist --version "$VERSION" --native=linux/amd64
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
+      - name: Verify draft assets match the validated build
+        run: |
+          gh release view "$TAG" --json isDraft --jq .isDraft | grep -qx true
+          expected=$( (cd dist && ls checksums.txt *.tar.gz) | sort)
+          actual=$(gh release view "$TAG" --json assets --jq '.assets[].name' | sort)
+          if [ "$expected" != "$actual" ]; then
+            printf '::error::Draft assets differ.\nexpected:\n%s\nactual:\n%s\n' "$expected" "$actual"
+            exit 1
+          fi
+          mkdir "$RUNNER_TEMP/draft"
+          gh release download "$TAG" --dir "$RUNNER_TEMP/draft"
+          cmp dist/checksums.txt "$RUNNER_TEMP/draft/checksums.txt"
+          (cd "$RUNNER_TEMP/draft" && sha256sum --check --strict checksums.txt)
+      - name: Publish release
+        run: |
+          if [ "$PRERELEASE" = true ]; then
+            gh release edit "$TAG" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$TAG" --draft=false --prerelease=false --latest
+          fi
+          gh release view "$TAG" --json isDraft,isPrerelease,isImmutable
+          if [ "$(gh release view "$TAG" --json isImmutable --jq .isImmutable)" != true ]; then
+            echo "::warning::Release $TAG is not immutable; enable immutable releases in repository settings"
+          fi

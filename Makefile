@@ -1,8 +1,12 @@
 GO ?= go
 PREFIX ?= $(HOME)/.local
-VERSION ?= 0.1.0-dev
+VERSION ?= 1.0.0-dev
+GORELEASER ?= goreleaser
+GORELEASER_VERSION := 2.18.3
+# Snapshot archives use the release naming path with a version no real tag uses.
+SNAPSHOT_VERSION ?= 0.0.0-rc.1
 
-.PHONY: build test smoke check demos install clean
+.PHONY: build test smoke check demos install clean notices release-check release-snapshot
 
 build:
 	$(GO) build -trimpath -ldflags '-s -w -X main.version=$(VERSION)' -o bin/projectory ./cmd/projectory
@@ -26,3 +30,15 @@ install: build
 
 clean:
 	rm -rf bin
+
+# Release pipeline targets (see .goreleaser.yaml and .github/workflows/release.yml).
+notices:
+	python3 scripts/third_party_notices.py --output build/THIRD_PARTY_NOTICES.md
+
+release-check:
+	@$(GORELEASER) --version 2>/dev/null | grep -Eq '^GitVersion:[[:space:]]+$(GORELEASER_VERSION)$$' || { echo "GoReleaser $(GORELEASER_VERSION) is required (GORELEASER=$(GORELEASER))" >&2; exit 1; }
+	$(GORELEASER) check
+
+release-snapshot: release-check
+	GORELEASER_CURRENT_TAG=v$(SNAPSHOT_VERSION) $(GORELEASER) release --snapshot --clean
+	python3 scripts/check_release_artifacts.py --dist dist --version $(SNAPSHOT_VERSION) --native

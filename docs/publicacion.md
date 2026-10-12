@@ -97,13 +97,81 @@ gh repo edit erikwco/projectory --visibility public --accept-visibility-change-c
 
 Después, comprueba la protección de `main` (paso 4), el canal de seguridad y que los badges del README cargan.
 
-## Preparar una versión descargable
+## Publicar una versión descargable
 
-Todavía no hay versiones publicadas. Cuando se prepare la primera, el tag puede ser `v0.1.0`. Verifica la versión incorporada al ejecutable:
+Las publicaciones usan tags `vMAJOR.MINOR.PATCH`; los candidatos usan `vMAJOR.MINOR.PATCH-rc.N`. El tag debe apuntar a un commit que ya pertenezca a `main`. El workflow `release.yml` vuelve a ejecutar las comprobaciones antes de publicar.
+
+1. Fusiona el PR con todos los checks correctos, sincroniza `main` y comprueba que el árbol esté limpio.
+2. Ejecuta `make check` y el ensayo de GoReleaser. Usa la versión de GoReleaser fijada en el workflow:
+
+   ```sh
+   make release-snapshot
+   ```
+
+   Si GoReleaser no está en tu `PATH`, indica su ruta con `make release-snapshot GORELEASER=/ruta/goreleaser`. La CI también ensaya el flujo de release sin publicar, con un tag estable y una RC locales sobre el mismo commit.
+
+3. Crea primero un candidato:
+
+   ```sh
+   git tag -a v1.0.0-rc.1 -m 'Projectory 1.0.0-rc.1'
+   git push origin v1.0.0-rc.1
+   ```
+
+4. Revisa el resultado del workflow **Release** y los archivos de [Releases](https://github.com/erikwco/projectory/releases). Comprueba la instalación y la actualización en carpetas temporales con datos ficticios.
+5. Una vez verificado el candidato, crea el tag estable `v1.0.0` sobre el commit aprobado y repite la verificación. Un cambio posterior requiere otro candidato o una nueva versión.
+
+GoReleaser compila con `CGO_ENABLED=0` para Linux/macOS y amd64/arm64. Cada archivo `projectory_VERSION_OS_ARCH.tar.gz` contiene el ejecutable, `LICENSE`, `README.md` y `THIRD_PARTY_NOTICES.md`. Los avisos se generan a partir de las dependencias usadas al compilar. `checksums.txt` contiene las sumas SHA-256.
+
+Activa las releases inmutables antes de publicar. Después de publicadas, sus tags y archivos no se sustituyen ni se borran para corregir errores; se publica otra versión. Consulta y verifica una publicación con:
 
 ```sh
-make build VERSION=0.1.0
-./bin/projectory --version
+gh release view v1.0.0 --repo erikwco/projectory
+gh release verify v1.0.0 --repo erikwco/projectory
+gh release download v1.0.0 --repo erikwco/projectory --pattern projectory_1.0.0_darwin_arm64.tar.gz
+gh release verify-asset v1.0.0 projectory_1.0.0_darwin_arm64.tar.gz --repo erikwco/projectory
 ```
 
-Publica solo binarios de plataformas verificadas. Incluye la licencia, los avisos que requieran las dependencias y las sumas SHA-256 de los archivos. Las notas de versión deben indicar los sistemas y shells soportados, los cambios y las limitaciones conocidas.
+Para probar una actualización real desde un binario anterior sin usar tus datos:
+
+```sh
+python3 scripts/smoke_update.py --binary /ruta/al/binario-anterior --expected-version 1.0.0
+```
+
+Añade `--prerelease` para ensayar un candidato. El script consulta GitHub, usa una instalación y un catálogo temporales y comprueba que la función `pt` abierta siga llamando al binario nuevo. No forma parte de las pruebas sin red de `make check`.
+
+El SHA-256 comprueba la integridad del archivo descargado. La verificación de GitHub comprueba su procedencia mediante la atestación de la release. Las notas de versión deben indicar cambios, plataformas y limitaciones.
+
+## Publicar la actualización de Homebrew
+
+La fórmula vive en [erikwco/homebrew-tap](https://github.com/erikwco/homebrew-tap). Consume los archivos ya publicados y sus hashes. No compila Go ni necesita un token con acceso a los dos repositorios.
+
+El workflow de la tap usa su propio `GITHUB_TOKEN`: valida la release, prueba la fórmula y prepara un PR. Primero ensaya el candidato sin modificar la fórmula estable:
+
+```sh
+gh workflow run bump.yml --repo erikwco/homebrew-tap -f version=1.0.0-rc.1 -f dry_run=true
+```
+
+Para una versión estable:
+
+```sh
+gh workflow run bump.yml --repo erikwco/homebrew-tap -f version=1.0.0 -f dry_run=false
+```
+
+Revisa y fusiona el PR generado después de sus pruebas. La tap necesita permitir que GitHub Actions cree pull requests. Los PR creados con `GITHUB_TOKEN` no disparan automáticamente workflows de `pull_request`; la validación se ejecuta dentro del workflow de publicación y su resultado se enlaza en el PR. No configures checks requeridos que nunca vayan a ejecutarse.
+
+Después de fusionar, comprueba:
+
+```sh
+brew update
+brew install erikwco/tap/projectory
+brew test erikwco/tap/projectory
+```
+
+En una instalación existente, usa `brew upgrade erikwco/tap/projectory`. Comprueba también `pt` en una terminal que permaneció abierta durante la actualización: debe seguir usando la ruta estable de Homebrew. El catálogo y los ajustes quedan fuera de la instalación.
+
+## Contratos que deben conservarse
+
+- La función `pt` de una terminal abierta puede llamar a un ejecutable más reciente. Mantén compatible `--selection-file` y `_visit` entre actualizaciones compatibles.
+- Un binario antiguo rechaza esquemas de catálogo más nuevos. Antes de cambiar el esquema, define la migración y la política de compatibilidad de versiones.
+- El comando `update` nunca abre ni migra el catálogo. Comprueba y sustituye solo el ejecutable independiente; las instalaciones de Homebrew se actualizan con Brew.
+- No se busca una versión nueva al abrir el selector. Las peticiones de actualización son explícitas.

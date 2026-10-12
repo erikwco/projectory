@@ -63,3 +63,13 @@ El registro de un proyecto y las actualizaciones son operaciones explícitas. La
 Los tests de Go crean repositorios temporales para comprobar worktrees en carpetas separadas, clones independientes, estados sin rama y proyectos anidados. Los tests de SQLite comprueban persistencia, concurrencia, reversión de ediciones y respaldos.
 
 `scripts/smoke.py` ejecuta el binario real en zsh, bash y pseudoterminales. Comprueba la secuencia de búsqueda, el cambio de tamaño, el cambio de directorio del shell, las visitas y los formularios. Las rutas de prueba incluyen espacios, comillas, caracteres de shell y saltos de línea.
+
+## Distribución y actualización del ejecutable
+
+Los tags de versión generan cuatro archivos precompilados mediante GoReleaser: macOS y Linux, cada uno en amd64 y arm64. Los archivos tienen nombres estables y un manifiesto SHA-256 compartido por el actualizador y la fórmula de Homebrew. Los candidatos `-rc.N` requieren una selección explícita.
+
+`internal/update` consulta las releases del repositorio oficial. La CLI recibe la versión incorporada por el compilador y separa la consulta de la instalación. Una instalación independiente descarga y verifica el archivo, valida el ejecutable y lo renombra sobre el destino desde un temporal en la misma carpeta. Conserva enlaces simbólicos y permisos. Las rutas administradas por Homebrew remiten a `brew upgrade`; las compilaciones de desarrollo se actualizan recompilando.
+
+La actualización no depende de `internal/app` ni abre el catálogo o los ajustes. La navegación normal tampoco depende de la red. Las pruebas de errores de descarga y validación exigen que el ejecutable anterior se conserve.
+
+`internal/shell.ExecutablePath` conserva la ruta de invocación si corresponde al ejecutable actual. En una instalación de Homebrew prefiere la ruta estable `opt/projectory/bin/projectory`, comprobada con `os.SameFile`. Así las funciones `pt` ya cargadas sobreviven a `brew upgrade` y a la limpieza de versiones anteriores.
