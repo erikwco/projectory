@@ -94,6 +94,7 @@ jobs:
       - name: Build and upload draft release
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
         run: '"$RUNNER_TEMP/goreleaser" release --clean'
       - name: Validate release contract
         run: python3 scripts/check_release_artifacts.py --dist dist --version "$VERSION" --native=linux/amd64

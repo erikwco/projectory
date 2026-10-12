@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGETS = [("darwin", "amd64"), ("darwin", "arm64"), ("linux", "amd64"), ("linux", "arm64")]
 VERSION = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-rc\.[1-9]\d*)?$")
 CHECKSUM_LINE = re.compile(r"^([0-9a-f]{64})  (\S+)$")
-GORELEASER_METADATA = {"artifacts.json", "config.yaml", "metadata.json"}
+GORELEASER_METADATA = {"artifacts.json", "CHANGELOG.md", "config.yaml", "metadata.json"}
 MEMBER_MODES = {"projectory": 0o755, "LICENSE": 0o644, "README.md": 0o644, "THIRD_PARTY_NOTICES.md": 0o644}
 MAIN_PATH = "github.com/erikwco/projectory/cmd/projectory"
 # ELF e_machine and Mach-O cputype values per GOARCH.

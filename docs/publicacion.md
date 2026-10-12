@@ -108,6 +108,8 @@ Las publicaciones usan tags `vMAJOR.MINOR.PATCH`; los candidatos usan `vMAJOR.MI
    make release-snapshot
    ```
 
+   Si GoReleaser no está en tu `PATH`, indica su ruta con `make release-snapshot GORELEASER=/ruta/goreleaser`. La CI también ensaya el flujo de release sin publicar, con un tag estable y una RC locales sobre el mismo commit.
+
 3. Crea primero un candidato:
 
    ```sh
@@ -125,6 +127,7 @@ Activa las releases inmutables antes de publicar. Después de publicadas, sus ta
 ```sh
 gh release view v1.0.0 --repo erikwco/projectory
 gh release verify v1.0.0 --repo erikwco/projectory
+gh release download v1.0.0 --repo erikwco/projectory --pattern projectory_1.0.0_darwin_arm64.tar.gz
 gh release verify-asset v1.0.0 projectory_1.0.0_darwin_arm64.tar.gz --repo erikwco/projectory
 ```
 

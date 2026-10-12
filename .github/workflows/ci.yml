@@ -65,7 +65,7 @@ jobs:
     env:
       GORELEASER_VERSION: 2.18.3
       GORELEASER_SHA256: b8dee4728bca1aba0d71a832a17cd0a3799f75372878e7ffa36aef2343bce0bc
-      DRY_RUN_VERSION: 0.0.0-rc.1
+      DRY_RUN_VERSION: 0.0.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -88,7 +88,12 @@ jobs:
           GORELEASER_CURRENT_TAG: v${{ env.DRY_RUN_VERSION }}
         run: |
           "$RUNNER_TEMP/goreleaser" check
-          "$RUNNER_TEMP/goreleaser" release --snapshot --clean
+          # Exercise the real release path, including CHANGELOG.md, and prove
+          # the requested stable tag wins over an RC on the same commit.
+          # These tags exist only in this runner's disposable checkout.
+          git tag "v${DRY_RUN_VERSION}-rc.1"
+          git tag "v${DRY_RUN_VERSION}"
+          "$RUNNER_TEMP/goreleaser" release --skip=publish --clean
       - name: Validate release contract
         run: python3 scripts/check_release_artifacts.py --dist dist --version "$DRY_RUN_VERSION" --native=linux/amd64
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -117,7 +122,7 @@ jobs:
             runner: macos-latest
     runs-on: ${{ matrix.runner }}
     env:
-      DRY_RUN_VERSION: 0.0.0-rc.1
+      DRY_RUN_VERSION: 0.0.0
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
