@@ -95,7 +95,7 @@ func (u *Updater) Installation() (Installation, error) {
 		return Installation{}, err
 	}
 	inst := Installation{Path: resolved, file: file}
-	if resolved != executable {
+	if entry, err := os.Lstat(executable); err == nil && entry.Mode()&os.ModeSymlink != 0 {
 		inst.Link = executable
 	}
 	marker := string(filepath.Separator) + "Cellar" + string(filepath.Separator) + "projectory" + string(filepath.Separator)
@@ -226,7 +226,8 @@ func (u *Updater) get(ctx context.Context, url string, limit int64, w io.Writer)
 	case resp.StatusCode == http.StatusOK:
 	case resp.StatusCode == http.StatusNotFound && strings.HasPrefix(url, apiBase):
 		return ErrNoRelease
-	case resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests:
+	case resp.StatusCode == http.StatusTooManyRequests ||
+		resp.StatusCode == http.StatusForbidden && (resp.Header.Get("X-RateLimit-Remaining") == "0" || resp.Header.Get("Retry-After") != ""):
 		return rateLimitError(resp.Header)
 	default:
 		return fmt.Errorf("GitHub respondió %s para %s", resp.Status, url)

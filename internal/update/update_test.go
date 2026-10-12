@@ -67,6 +67,7 @@ func TestLatestHTTPFailures(t *testing.T) {
 		"no stable release": {updatetest.Response{Status: http.StatusNotFound, Body: []byte(`{"message":"Not Found"}`)}, ErrNoRelease.Error()},
 		"rate limited":      {updatetest.Response{Status: http.StatusForbidden, Header: http.Header{"X-Ratelimit-Remaining": {"0"}, "X-Ratelimit-Reset": {"1900000000"}}}, "limitó las solicitudes"},
 		"too many requests": {updatetest.Response{Status: http.StatusTooManyRequests, Header: http.Header{"Retry-After": {"60"}}}, "reintenta en 60 s"},
+		"forbidden":         {updatetest.Response{Status: http.StatusForbidden}, "403 Forbidden"},
 		"server error":      {updatetest.Response{Status: http.StatusBadGateway}, "502"},
 		"malformed JSON":    {updatetest.Response{Status: http.StatusOK, Body: []byte(`{"tag_name":`)}, "respuesta de GitHub no válida"},
 		"oversized":         {updatetest.Response{Status: http.StatusOK, Body: []byte(strings.Repeat(" ", apiLimit+1))}, "demasiado grande"},
@@ -131,7 +132,7 @@ func TestInstallationDetection(t *testing.T) {
 	}
 	for _, c := range cases {
 		inst, err := (&Updater{Version: c.version, Executable: c.executable}).Installation()
-		if err != nil || inst.Method != c.method || inst.Path != c.path || (c.link != "" && inst.Link != c.link) {
+		if err != nil || inst.Method != c.method || inst.Path != c.path || inst.Link != c.link {
 			t.Errorf("Installation(%s) = %+v, %v", c.executable, inst, err)
 		}
 	}

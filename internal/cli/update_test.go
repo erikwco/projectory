@@ -110,6 +110,13 @@ func TestUpdateHomebrewDelegatesToBrew(t *testing.T) {
 	if r.err != nil || !strings.Contains(r.output, "Instalación: Homebrew") || !strings.Contains(r.output, update.BrewUpgrade) || r.gh.Downloaded() {
 		t.Fatalf("brew check: %v\n%s", r.err, r.output)
 	}
+
+	gh := updatetest.New(t)
+	gh.JSON(updatetest.API+"/releases?per_page=100", []any{gh.Release("1.1.0-rc.1", "darwin", "arm64")})
+	r = runUpdate(t, gh, "1.0.0", brewPath, false, "", "--check", "--prerelease")
+	if r.err != nil || !strings.Contains(r.output, "solo distribuye versiones estables") || strings.Contains(r.output, update.BrewUpgrade) || r.gh.Downloaded() {
+		t.Fatalf("brew must not suggest upgrade for an unavailable candidate: %v\n%s", r.err, r.output)
+	}
 }
 
 func TestUpdateDevelopmentBuildIsNeverReplaced(t *testing.T) {

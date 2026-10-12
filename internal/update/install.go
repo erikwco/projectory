@@ -251,6 +251,9 @@ func validate(ctx context.Context, path string, v Version) error {
 	ctx, cancel := context.WithTimeout(ctx, validateTimeout)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, path, "--version").Output()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if got := strings.TrimSpace(string(out)); err != nil || got != binaryName+" version "+v.String() {
 		return fmt.Errorf("el ejecutable descargado no reporta la versión %s; no se instaló nada", v)
 	}

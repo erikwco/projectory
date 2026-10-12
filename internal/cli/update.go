@@ -65,6 +65,10 @@ func newUpdateCommand(u *update.Updater, interactive func(*cobra.Command) bool) 
 			return err
 		}
 		if check {
+			if inst.Method == update.Homebrew && latest.Version.Prerelease() {
+				_, err = fmt.Fprintln(out, "Hay una versión candidata disponible. La fórmula de Homebrew solo distribuye versiones estables.")
+				return err
+			}
 			next := "projectory update"
 			if inst.Method == update.Homebrew {
 				next = update.BrewUpgrade
@@ -88,7 +92,7 @@ func newUpdateCommand(u *update.Updater, interactive func(*cobra.Command) bool) 
 			}
 		}
 		// Interrupting from here on cancels the download and removes temporary files.
-		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 		defer stop()
 		fmt.Fprintf(out, "Descargando y verificando projectory %s…\n", latest.Version)
 		if err := u.Install(ctx, inst, latest); err != nil {
