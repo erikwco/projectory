@@ -62,7 +62,7 @@ func New(version string) *cobra.Command {
 	listFlags(root, rootList)
 	root.Args = cobra.NoArgs
 	root.RunE = func(cmd *cobra.Command, args []string) error { return s.list(cmd, rootList, false) }
-	root.AddCommand(s.add(), s.listCommand(false), s.listCommand(true), s.goCommand(), s.edit(), s.remove(), s.refresh(), s.init(), s.visit(), s.backup(), s.info(), settingsCommand())
+	root.AddCommand(s.add(), s.listCommand(false), s.listCommand(true), s.goCommand(), s.edit(), s.remove(), s.refresh(), s.init(), s.visit(), s.backup(), s.info(), settingsCommand(), updateCommand(version))
 	return root
 }
 
@@ -409,7 +409,7 @@ func (s *settings) init() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		code, err := shell.Init(args[0], command, binary)
+		code, err := shell.Init(args[0], command, shell.ExecutablePath(os.Args[0], binary))
 		if err != nil {
 			return err
 		}

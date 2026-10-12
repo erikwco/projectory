@@ -137,6 +137,24 @@ El detalle consulta la rama y los cambios pendientes de la ubicación selecciona
 
 La detección de tecnologías lee archivos conocidos en la carpeta registrada. Puede identificar varias tecnologías por ubicación. No instala dependencias ni ejecuta los scripts de los manifiestos.
 
+## Actualizar el programa
+
+```sh
+pt update --check
+pt update
+pt update --yes
+```
+
+`--check` consulta la versión estable publicada en GitHub y muestra si es más reciente. Sin `--check`, el comando solicita confirmación antes de descargar e instalar; en un script debes usar `--yes`. No hay consultas automáticas al abrir `pt`.
+
+El actualizador independiente verifica SHA-256, comprueba el ejecutable descargado y lo sustituye mediante un renombrado atómico en la misma carpeta. Conserva los enlaces simbólicos al ejecutable, los permisos, el catálogo y los ajustes. Una descarga o validación fallida conserva el binario anterior. No instala versiones anteriores ni usa `sudo`.
+
+Si Projectory está instalado con Homebrew, usa `brew update && brew upgrade erikwco/tap/projectory`. El actualizador no reemplaza archivos administrados por Brew. Las compilaciones de desarrollo admiten la consulta, pero se actualizan recompilando.
+
+`--prerelease` incluye candidatos de prueba como `1.0.0-rc.1` en la consulta o actualización. Por defecto solo se ofrecen versiones estables. La búsqueda de candidatos considera las 100 publicaciones más recientes. No es necesario autenticarse en GitHub; si su API limita las peticiones, el comando lo indica.
+
+`update` actualiza el programa; `refresh` vuelve a consultar los repositorios que ya están en el catálogo.
+
 ## Persistencia y respaldo
 
 ```sh
@@ -164,6 +182,6 @@ projectory init zsh
 projectory init bash --cmd proyectos
 ```
 
-`init` imprime la definición de la función. No modifica los archivos de inicio del shell. El nombre predeterminado es `pt`; el nombre personalizado debe ser un identificador válido de shell.
+`init` imprime la definición de la función. Conserva el punto de entrada de la instalación y usa `opt/projectory/bin/projectory` cuando detecta Homebrew, para que una actualización no deje la función apuntando a una versión eliminada. No modifica los archivos de inicio del shell. El nombre predeterminado es `pt`; el nombre personalizado debe ser un identificador válido de shell.
 
 Esta versión proporciona integración con zsh y bash en macOS y Linux. La compatibilidad con otros shells queda fuera de esta versión.

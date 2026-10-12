@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Projectory está en la versión `0.1.0-dev` y sigue en desarrollo. Todavía no hay versiones publicadas. Este documento describe la implementación y sus límites.
+Este documento describe la implementación de Projectory y sus límites. Las versiones descargables están en [Releases](https://github.com/erikwco/projectory/releases); `projectory --version` muestra la versión instalada.
 
 ## Objetivo y preferencias
 
@@ -28,9 +28,9 @@ La licencia es [MIT](../LICENSE). `main` solo acepta cambios mediante pull reque
 
 ## Implementación disponible
 
-La versión del ejecutable es `0.1.0-dev`. El código usa Go 1.26 y declara `toolchain go1.26.9` en `go.mod`. Las dependencias directas están fijadas en ese archivo: Bubble Tea y Bubbles v2, Lip Gloss v2, Cobra, `modernc.org/sqlite`, `golang.org/x/term` y las utilidades ANSI de Charm.
+Las compilaciones de desarrollo se identifican con el sufijo `-dev`; las publicadas incorporan la versión del tag. El código usa Go 1.26 y declara `toolchain go1.26.9` en `go.mod`. Las dependencias directas están fijadas en ese archivo: Bubble Tea y Bubbles v2, Lip Gloss v2, Cobra, `modernc.org/sqlite`, `golang.org/x/term` y las utilidades ANSI de Charm.
 
-Los comandos implementados son `add`, `list`, `dash`, `go`, `edit`, `remove`, `refresh`, `backup`, `info`, `settings` e `init`. Sin subcomando se abre el selector. `_visit` y `--selection-file` son parte interna de la comunicación con el shell.
+Los comandos implementados son `add`, `list`, `dash`, `go`, `edit`, `remove`, `refresh`, `backup`, `info`, `settings`, `update` e `init`. Sin subcomando se abre el selector. `_visit` y `--selection-file` son parte interna de la comunicación con el shell.
 
 El registro distingue proyectos y ubicaciones. Nombre, descripción y tags se comparten por proyecto; ruta, etiqueta, tecnologías y visitas pertenecen a cada ubicación. La corrección de una ruta conserva la identidad y el contador de visitas.
 
@@ -64,7 +64,8 @@ La integración con zsh y bash confirma el cambio de carpeta antes de sumar la v
 - `internal/app/`: registro, edición y actualización compartidos por CLI y TUI.
 - `internal/tui/`: formularios, selector, dashboard, ajustes, detalle y estilos.
 - `internal/cli/`: comandos, opciones y salidas de texto o JSON.
-- `internal/shell/`: generación de la función `pt` para zsh y bash.
+- `internal/shell/`: generación de la función `pt` para zsh y bash, con una ruta estable entre versiones de Homebrew.
+- `internal/update/`: consulta de releases, verificación de descargas y reemplazo del binario independiente.
 - `scripts/smoke.py`: pruebas del ejecutable real y de pseudoterminales.
 - `scripts/demo.py`: grabación de los GIF del README con datos ficticios; se ejecuta con `make demos`.
 - `scripts/preview.py`: capturas de revisión de la TUI real con datos temporales mediante VHS.
@@ -78,6 +79,8 @@ La integración con zsh y bash confirma el cambio de carpeta antes de sumar la v
 El binario compilado para el entorno local está en `bin/projectory`. `bin/` está excluido de Git y se regenera con `make build`.
 
 ## Instalación, función `pt` y datos
+
+Homebrew instala los binarios precompilados mediante `brew install erikwco/tap/projectory`. También se pueden descargar desde Releases. `pt update` actualiza las instalaciones independientes publicadas; las de Homebrew usan `brew upgrade`. El comando verifica las descargas y conserva el catálogo y los ajustes. No se consulta la red durante la navegación.
 
 `make install` copia el ejecutable a `~/.local/bin/projectory`. `PREFIX` permite cambiar el prefijo de instalación. No modifica `.zshrc` ni crea un archivo `pt`.
 

@@ -1,0 +1,67 @@
+# Release pipeline: built and validated with GoReleaser 2.18.3 exactly.
+# Archive contract is enforced by scripts/check_release_artifacts.py.
+version: 2
+
+project_name: projectory
+
+before:
+  hooks:
+    - go mod verify
+    - python3 scripts/third_party_notices.py --output build/THIRD_PARTY_NOTICES.md
+
+builds:
+  - id: projectory
+    main: ./cmd/projectory
+    binary: projectory
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: projectory
+    ids: [projectory]
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds_info:
+      owner: root
+      group: root
+      mode: 0755
+      mtime: "{{ .CommitDate }}"
+    files:
+      - src: LICENSE
+        info: &doc_info
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+      - src: README.md
+        info: *doc_info
+      - src: build/THIRD_PARTY_NOTICES.md
+        strip_parent: true
+        info: *doc_info
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  # Dry runs set GORELEASER_CURRENT_TAG so snapshots use the release naming path.
+  version_template: "{{ .Version }}"
+
+changelog:
+  sort: asc
+
+release:
+  github:
+    owner: erikwco
+    name: projectory
+  # Immutable releases: upload every asset to a draft, verify, then publish.
+  draft: true
+  replace_existing_draft: true
+  prerelease: auto

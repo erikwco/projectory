@@ -140,6 +140,7 @@ def main():
         for shell in shells:
             code = r'''
 eval "$("$PROJECTORY_BIN" init "$PROJECTORY_SHELL")"
+pt update --help > "$PROJECTORY_UPDATE_HELP" || exit 18
 pt go "$PROJECTORY_LOCATION_ID" --db "$PROJECTORY_TEST_DB" || exit 10
 [ "$PWD" = "$PROJECTORY_TARGET" ] || exit 11
 pt go missing-location --db "$PROJECTORY_TEST_DB" >/dev/null 2>&1 && exit 12
@@ -150,11 +151,36 @@ builtin cd -- "$PROJECTORY_TARGET"
 pt '~' || exit 16
 [ "$PWD" = "$HOME" ] || exit 17
 '''
-            result = subprocess.run([shell, "-f" if shell == "zsh" else "--noprofile", "-c", code], cwd=root, env={**env, "PROJECTORY_SHELL": shell}, capture_output=True, text=True)
+            update_help = root / f"update-help-{shell}.txt"
+            result = subprocess.run([shell, "-f" if shell == "zsh" else "--noprofile", "-c", code], cwd=root, env={**env, "PROJECTORY_SHELL": shell, "PROJECTORY_UPDATE_HELP": str(update_help)}, capture_output=True, text=True)
             assert result.returncode == 0, f"{shell}: {result.stderr}"
+            assert "--check" in update_help.read_text(), f"{shell}: pt did not forward the update command"
         assert locations()[0]["visits"] == len(shells)
         assert not (root / "unused-default" / "catalog.db").exists(), "visit was recorded in the wrong database"
         print(f"PASS actual cd, pt ~, and visit accounting in {', '.join(shells)}, including unusual paths")
+
+        for shell in shells:
+            prefix = root / f"brew-{shell}"
+            old_keg = prefix / "Cellar/projectory/old"
+            new_keg = prefix / "Cellar/projectory/new"
+            for keg in (old_keg, new_keg):
+                (keg / "bin").mkdir(parents=True)
+                shutil.copy2(binary, keg / "bin/projectory")
+            (prefix / "opt").mkdir()
+            (prefix / "opt/projectory").symlink_to(old_keg, target_is_directory=True)
+            (prefix / "bin").mkdir()
+            (prefix / "bin/projectory").symlink_to(old_keg / "bin/projectory")
+            code = r'''
+set -e
+eval "$("$PROJECTORY_BIN" init "$PROJECTORY_SHELL")"
+rm "$PROJECTORY_BREW_PREFIX/opt/projectory"
+ln -s "$PROJECTORY_BREW_PREFIX/Cellar/projectory/new" "$PROJECTORY_BREW_PREFIX/opt/projectory"
+rm "$PROJECTORY_BREW_PREFIX/Cellar/projectory/old/bin/projectory"
+pt --version
+'''
+            result = subprocess.run([shell, "-f" if shell == "zsh" else "--noprofile", "-c", code], cwd=root, env={**env, "PROJECTORY_SHELL": shell, "PROJECTORY_BIN": str(prefix / "bin/projectory"), "PROJECTORY_BREW_PREFIX": str(prefix)}, capture_output=True, text=True)
+            assert result.returncode == 0 and "projectory version" in result.stdout, f"{shell}: function broke after Homebrew cleanup: {result.stderr}"
+        print("PASS open shell function survives a replaced Homebrew keg and removal of the old binary")
 
         # Noninteractive output and cancellation must never select a directory.
         chosen = root / "selection"
