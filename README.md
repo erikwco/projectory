@@ -28,10 +28,10 @@ Funciona con zsh y bash en macOS y Linux, tanto en Intel/AMD de 64 bits como en 
 
 ```sh
 brew install erikwco/tap/projectory
-eval "$(projectory init zsh)"
+eval "$("$(brew --prefix)/opt/projectory/bin/projectory" init zsh)"
 ```
 
-En bash, usa `eval "$(projectory init bash)"`. Homebrew descarga el binario correspondiente a tu sistema; no necesitas Go.
+En bash, cambia `zsh` por `bash`. La ruta explícita de Homebrew evita activar otra instalación de `projectory` que aparezca antes en tu `PATH`. Homebrew descarga el binario correspondiente a tu sistema; no necesitas Go.
 
 ### Binario independiente
 
