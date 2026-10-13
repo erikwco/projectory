@@ -393,16 +393,18 @@ func (b Browser) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch key.String() {
 			case "ctrl+c":
 				return b, tea.Quit
-			case "enter", "up", "down":
+			case "enter", "tab", "up", "down":
 				b.Applied = b.Query.Value()
 				b.Query.Blur()
 				b.Mode = browsing
-				if key.String() == "enter" {
+				arrow := key.String() == "up" || key.String() == "down"
+				if !arrow {
 					b.Selected = 0
 				}
 				b.filter()
 				b.Git = nil
-				if key.String() != "enter" {
+				// Arrows also move the selection; Enter and Tab only focus the list.
+				if arrow {
 					return b.Update(msg)
 				}
 				return b, b.inspectLater()

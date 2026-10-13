@@ -46,11 +46,11 @@ Las teclas del listado con **Buscar al abrir** desactivado son:
 - **RePág**, **AvPág**: desplazar la selección varias filas.
 - **/**: editar la búsqueda actual.
 - **↑/↓** durante la búsqueda: confirmar el filtro, devolver el foco al listado y mover la selección en la misma pulsación.
-- **Enter** durante la búsqueda: confirmar la búsqueda y devolver el foco al listado, sin abrir una carpeta.
+- **Enter** o **Tab** durante la búsqueda: confirmar la búsqueda y devolver el foco al listado con el primer resultado seleccionado, sin abrir una carpeta ni el detalle.
 - **Enter** en el listado: entrar al proyecto si tiene una ruta; con varias rutas, abrir el selector de ubicaciones.
 - **Esc** durante la búsqueda: recuperar el filtro anterior y volver al listado.
 - **Esc** en el listado: limpiar el filtro; sin filtro, salir.
-- **Tab**: abrir o cerrar el detalle completo.
+- **Tab** en el listado: abrir o cerrar el detalle completo.
 - **F2** desde el listado o la búsqueda: abrir ajustes.
 - **o**: cambiar el orden durante la sesión, sin modificar el predeterminado.
 - **r**: actualizar los registros y descubrir worktrees.
@@ -79,7 +79,7 @@ pt settings --default-sort=name
 
 `settings` abre los ajustes en una terminal interactiva. Sin terminal, muestra los valores actuales y la ruta del archivo. Los flags modifican las preferencias sin abrir la TUI ni el catálogo; se pueden combinar y conservan los valores no indicados.
 
-**Buscar al abrir** enfoca el buscador al iniciar `pt`, `pt list` o `pt dash`. Puedes escribir, pegar o borrar para filtrar sin pulsar **/**, también después de recorrer la lista. **↑/↓** confirma el filtro y mueve la selección; el siguiente **Enter** activa el proyecto. Sin usar una flecha, el primer **Enter** devuelve el foco al listado y el siguiente activa el proyecto. Desactivado conserva el inicio y los atajos habituales; es el valor predeterminado cuando no hay un archivo de ajustes.
+**Buscar al abrir** enfoca el buscador al iniciar `pt`, `pt list` o `pt dash`. Puedes escribir, pegar o borrar para filtrar sin pulsar **/**, también después de recorrer la lista. **↑/↓** confirma el filtro y mueve la selección; el siguiente **Enter** activa el proyecto. Sin usar una flecha, el primer **Enter** o **Tab** devuelve el foco al listado; después, **Enter** activa el proyecto y **Tab** abre su detalle. Desactivado conserva el inicio y los atajos habituales; es el valor predeterminado cuando no hay un archivo de ajustes.
 
 **Orden predeterminado** elige el orden inicial del selector, el dashboard y las salidas de texto o JSON. Los cuatro valores son `added`, `visited`, `visits` y `name`. Las configuraciones anteriores que no contienen esta preferencia conservan `added`.
 
