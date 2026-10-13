@@ -174,6 +174,24 @@ func TestAutomaticSearchResumesTypingAfterTab(t *testing.T) {
 	}
 }
 
+func TestSearchHelpKeepsFocusAndCancelKeysVisible(t *testing.T) {
+	for _, width := range []int{24, 25, 26, 39, 40, 71, 72, 80, 120} {
+		b := sampleBrowser(t)
+		b = update(b, press('/'))
+		b = update(b, tea.WindowSizeMsg{Width: width, Height: 24})
+		lines := strings.Split(b.View().Content, "\n")
+		help := lines[len(lines)-1]
+		for _, key := range []string{"Enter", "Tab", "Esc"} {
+			if !strings.Contains(help, key) {
+				t.Fatalf("search help at %d columns hides %s: %q", width, key, help)
+			}
+		}
+		if strings.Contains(help, "…") {
+			t.Fatalf("search help is truncated at %d columns: %q", width, help)
+		}
+	}
+}
+
 func TestSearchArrowsHandleEmptyResultsAndLeaveCursorKeysInInput(t *testing.T) {
 	b := browserWithSettings(t, true, false)
 	b = typeQuery(b, "missing")

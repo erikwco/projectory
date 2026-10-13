@@ -299,7 +299,7 @@ func (b Browser) mainView() string {
 			help = "↑↓ elegir · Enter/Tab lista · Esc · F2"
 		}
 		if w < 40 {
-			help = "↑↓ · Enter/Tab lista · Esc"
+			help = "↑↓ · Enter/Tab · Esc"
 		}
 	}
 	lines = append(lines, p.Muted.Render(fit(help, w)))
