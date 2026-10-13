@@ -61,7 +61,7 @@ func (s *settings) withApp(cmd *cobra.Command, run func(context.Context, *app.Ap
 
 func New(version string) *cobra.Command {
 	s := &settings{}
-	root := &cobra.Command{Use: "projectory [proyecto]", Short: "Tus proyectos, copias y worktrees en un solo catálogo", Long: "Tus proyectos, copias y worktrees en un solo catálogo.\n\nSin argumentos abre el selector. Con un nombre, ID, ruta o proyecto/etiqueta entra a esa ubicación\ncomo «go». Los subcomandos tienen prioridad: usa «go nombre» o «-- nombre» para un proyecto\nque se llame como un subcomando o empiece por guion.", Version: version, SilenceUsage: true, SilenceErrors: true}
+	root := &cobra.Command{Use: "projectory [proyecto]", Short: "Tus proyectos, copias y worktrees en un solo catálogo", Long: "Tus proyectos, copias y worktrees en un solo catálogo.\n\nSin argumentos abre el selector. Con un nombre, ID, ruta o proyecto/etiqueta\nentra a esa ubicación como «go». Los subcomandos tienen prioridad: usa\n«go nombre» o «-- nombre» para un proyecto que se llame como un subcomando o\nempiece por guion.", Version: version, SilenceUsage: true, SilenceErrors: true}
 	root.SetIn(os.Stdin)
 	root.SetOut(os.Stdout)
 	root.SetErr(os.Stderr)
@@ -171,7 +171,7 @@ func (s *settings) selectLocation(cmd *cobra.Command, l *catalog.Location) error
 	}
 	_, err := fmt.Fprintln(cmd.OutOrStdout(), l.Path)
 	if isTerminal(cmd.OutOrStdout()) {
-		fmt.Fprintln(cmd.ErrOrStderr(), "Para cambiar el directorio del shell, activa: eval \"$(projectory init zsh)\" y usa pt.")
+		fmt.Fprintln(cmd.ErrOrStderr(), "Para que pt cambie de carpeta, activa su función en este shell:\n  zsh:  eval \"$(projectory init zsh)\"\n  bash: eval \"$(projectory init bash)\"")
 	}
 	return err
 }

@@ -26,6 +26,10 @@ type Matches struct {
 	Dark, Done    bool
 	Notice        string
 	Choice        *catalog.Location
+	// Lines is the tallest preview drawn so far. The preview never gets
+	// shorter while it runs: Bubble Tea's inline renderer loses its first row
+	// when a frame shrinks and leaves the old rows on screen.
+	Lines int
 }
 
 // NewMatches preselects the closest available location. Locations arrive
@@ -38,6 +42,7 @@ func NewMatches(query string, n catalog.Navigation) Matches {
 			break
 		}
 	}
+	m.Lines = m.height()
 	return m
 }
 
@@ -52,10 +57,20 @@ func (m Matches) rows() int {
 	return max(0, min(matchRows, len(m.Locations), m.Height-4))
 }
 
+// height counts the rows of the preview before padding: the title, the
+// locations, the path, and the help, or the single notice that replaces them.
+func (m Matches) height() int {
+	if rows := m.rows(); rows > 0 {
+		return rows + 3
+	}
+	return 1
+}
+
 func (m Matches) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.Width, m.Height = msg.Width, msg.Height
+		m.Lines = max(m.Lines, m.height())
 	case tea.BackgroundColorMsg:
 		m.Dark = msg.IsDark()
 	case tea.KeyPressMsg:
@@ -99,15 +114,22 @@ func fitPath(path string, width int) string {
 	return path
 }
 
+// View keeps the last frame when the person answers; RunMatches erases it
+// once the program has stopped drawing.
 func (m Matches) View() tea.View {
-	// An empty final frame erases the preview, leaving the prompt as it was.
-	if m.Done {
-		return tea.NewView("")
-	}
+	content := m.content()
+	pad := m.Lines - strings.Count(content, "\n") - 1
+	// Padding goes below the preview. In a terminal shorter than the padded
+	// preview, the rows the renderer cuts from the top are blank instead.
+	above := min(max(0, pad), max(0, m.Lines-m.Height))
+	return tea.NewView(strings.Repeat("\n", above) + content + strings.Repeat("\n", max(0, pad-above)))
+}
+
+func (m Matches) content() string {
 	p := styles(m.Dark)
 	rows := m.rows()
 	if rows == 0 {
-		return tea.NewView(frame("Amplía el terminal para elegir · Esc cancelar", m.Width, max(1, m.Height-1)))
+		return frame("Amplía el terminal para elegir · Esc cancelar", m.Width, 1)
 	}
 	w := min(m.Width, 100)
 	title := fmt.Sprintf("Coincidencias para «%s»", Clean(m.Query))
@@ -153,7 +175,7 @@ func (m Matches) View() tea.View {
 		help = "↑↓ · Enter · Esc"
 	}
 	lines = append(lines, status, p.Muted.Render(fit(help, w)))
-	return tea.NewView(strings.Join(lines, "\n"))
+	return strings.Join(lines, "\n")
 }
 
 // RunMatches returns nil when the person cancels.
@@ -162,5 +184,19 @@ func RunMatches(ctx context.Context, m Matches, in io.Reader, out io.Writer) (*c
 	if err != nil {
 		return nil, err
 	}
-	return model.(Matches).Choice, nil
+	m = model.(Matches)
+	return m.Choice, m.erase(out)
+}
+
+// erase removes the final frame once the program has stopped. Bubble Tea
+// leaves the cursor at the start of the frame's last row, and the frame is the
+// padded preview, cut to the terminal height. Going up to its first row and
+// erasing below keeps the shell history above it, on the main screen.
+func (m Matches) erase(out io.Writer) error {
+	seq := "\r" + ansi.EraseScreenBelow
+	if up := min(m.Lines, m.Height) - 1; up > 0 {
+		seq = "\r" + ansi.CursorUp(up) + ansi.EraseScreenBelow
+	}
+	_, err := io.WriteString(out, seq)
+	return err
 }

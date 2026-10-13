@@ -133,7 +133,19 @@ Los subcomandos tienen prioridad: `pt add` registra una carpeta aunque exista un
 
 `pt ~` vuelve a tu carpeta personal mediante la función del shell, sin abrir SQLite ni registrar una visita. También acepta `pt '~'` y `pt "$HOME"`, siempre como único argumento. `pt` sin argumentos sigue abriendo el selector.
 
-La navegación por nombre requiere la función generada por esta versión. Si ya tenías una terminal abierta al instalar o actualizar, vuelve a activarla con `eval "$("$HOME/.local/bin/projectory" init zsh)"` (o `bash`). Una función anterior sigue entrando con `pt go`, pero con `pt nombre` solo imprime la ruta. La visita se registra después de que el shell confirme el cambio de directorio.
+La navegación por nombre requiere la función generada por esta versión. Si ya tenías una terminal abierta al instalar o actualizar, vuelve a activarla en ella con la ruta de tu instalación. Con Homebrew:
+
+```sh
+eval "$("$(brew --prefix)/opt/projectory/bin/projectory" init zsh)"
+```
+
+Con una instalación manual o `make install`:
+
+```sh
+eval "$("$HOME/.local/bin/projectory" init zsh)"
+```
+
+En bash, cambia `zsh` por `bash`. Si instalaste con otro `PREFIX`, usa esa ruta. Una función anterior sigue entrando con `pt go`, pero con `pt nombre` solo imprime la ruta. La visita se registra después de que el shell confirme el cambio de directorio.
 
 Las visitas cuentan entradas mediante `pt`. Un `cd` manual no modifica el contador. El ejecutable sin la función del shell imprime la ruta seleccionada y no puede cambiar el directorio de su proceso padre.
 

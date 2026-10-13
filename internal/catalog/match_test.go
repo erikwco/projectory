@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -127,6 +128,22 @@ func TestEditDistance(t *testing.T) {
 		if got := editDistance([]rune(tc.a), []rune(tc.b)); got != tc.want {
 			t.Errorf("editDistance(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
 		}
+	}
+}
+
+// Two typing mistakes can make the query two characters shorter or longer
+// than the beginning it misspells; much longer queries are not compared.
+func TestTypoDistanceUsesTheWholeAllowance(t *testing.T) {
+	for _, tc := range []struct {
+		query, word string
+		want        int
+	}{{"tixxenda", "tiendaweb", 2}, {"tendwe", "tiendawebshop", 2}, {"blgo", "blog-admin", 1}, {strings.Repeat("tienda", 2000), "tienda", 3}} {
+		if got := typoDistance(tc.query, tc.word, 2); got != tc.want {
+			t.Errorf("typoDistance(%.12q, %q) = %d, want %d", tc.query, tc.word, got, tc.want)
+		}
+	}
+	if Resembles(strings.Repeat("list", 2000), "list") {
+		t.Error("a long word resembles a short command")
 	}
 }
 

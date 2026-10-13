@@ -173,7 +173,7 @@ func closeness(q, v folded, offset int) (score, bool) {
 	}
 	distance := allowed + 1
 	for _, word := range append([]string{v.compact}, v.words...) {
-		distance = min(distance, typoDistance(q.compact, word))
+		distance = min(distance, typoDistance(q.compact, word, allowed))
 	}
 	if distance > allowed {
 		return score{}, false
@@ -208,7 +208,7 @@ func wordPrefixes(query, words []string) (int, bool) {
 // the same bounds that approximate navigation tolerates.
 func Resembles(word, name string) bool {
 	allowed := typoAllowance(word)
-	return allowed > 0 && editDistance([]rune(strings.ToLower(word)), []rune(strings.ToLower(name))) <= allowed
+	return allowed > 0 && within([]rune(strings.ToLower(word)), []rune(strings.ToLower(name)), allowed) <= allowed
 }
 
 // typoAllowance bounds spelling tolerance by query length: short queries would
@@ -225,16 +225,24 @@ func typoAllowance(query string) int {
 }
 
 // typoDistance compares the query with the whole word and with its beginning,
-// so a misspelled prefix such as "blgo" still finds "blog-admin".
-func typoDistance(query, word string) int {
+// so a misspelled prefix such as "blgo" still finds "blog-admin". Only
+// beginnings that could be within the allowance are compared.
+func typoDistance(query, word string, allowed int) int {
 	q, w := []rune(query), []rune(word)
-	best := editDistance(q, w)
-	for n := len(q) - 1; n <= len(q)+1; n++ {
-		if n > 0 && n < len(w) {
-			best = min(best, editDistance(q, w[:n]))
-		}
+	best := within(q, w, allowed)
+	for n := max(1, len(q)-allowed); n <= len(q)+allowed && n < len(w); n++ {
+		best = min(best, editDistance(q, w[:n]))
 	}
 	return best
+}
+
+// within returns the edit distance, or allowed+1 without computing it when the
+// lengths alone already differ by more than allowed.
+func within(a, b []rune, allowed int) int {
+	if max(len(a)-len(b), len(b)-len(a)) > allowed {
+		return allowed + 1
+	}
+	return editDistance(a, b)
 }
 
 // editDistance counts insertions, deletions, substitutions, and transpositions
