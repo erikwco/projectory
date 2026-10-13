@@ -12,7 +12,7 @@ Por debajo de 24 columnas u 8 filas, un aviso sustituye cualquier vista, incluid
 
 El proyecto muestra visitas acumuladas y la última visita entre sus ubicaciones. La búsqueda compara los datos de cada ubicación y presenta su proyecto una sola vez. Conserva todas sus rutas y preselecciona una coincidencia en el selector.
 
-`/` enfoca la búsqueda y la lista se filtra mientras se escribe. ↑/↓ aplica el filtro, devuelve el foco a la lista y mueve la selección en la misma pulsación; Enter después activa el proyecto. El primer Enter sin usar flechas solo aplica el filtro y devuelve el foco a la lista. Esc durante la edición recupera la búsqueda aplicada anteriormente.
+`/` enfoca la búsqueda y la lista se filtra mientras se escribe. ↑/↓ aplica el filtro, devuelve el foco a la lista y mueve la selección en la misma pulsación; Enter después activa el proyecto. Sin usar flechas, el primer Enter o Tab solo aplica el filtro y devuelve el foco a la lista con el primer resultado seleccionado; ya en la lista, Tab abre el detalle. Esc durante la edición recupera la búsqueda aplicada anteriormente.
 
 ## Formularios
 

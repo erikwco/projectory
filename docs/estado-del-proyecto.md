@@ -11,7 +11,7 @@ Las prioridades acordadas son:
 - Una utilidad local en Go con comandos y pantallas TUI.
 - Registro de la carpeta actual o de una ruta introducida en un formulario.
 - Nombre y descripción opcional, con categorías mediante tags.
-- Listado con una entrada por proyecto, ordenado por registros recientes. La búsqueda empieza con `/` y filtra mientras se escribe. Enter devuelve el foco al listado. Otro Enter abre el proyecto si tiene una ruta o pide elegir una ubicación si tiene varias. Esc durante la búsqueda recupera el filtro anterior.
+- Listado con una entrada por proyecto, ordenado por registros recientes. La búsqueda empieza con `/` y filtra mientras se escribe. Enter o Tab devuelven el foco al listado. Otro Enter abre el proyecto si tiene una ruta o pide elegir una ubicación si tiene varias. Esc durante la búsqueda recupera el filtro anterior.
 - Dashboard con administración y contadores de visitas.
 - SQLite para persistencia y detección automática de tecnologías.
 - Copias independientes y worktrees creados por distintas herramientas, incluso en carpetas alejadas entre sí.
@@ -38,7 +38,7 @@ Los worktrees se relacionan mediante el directorio Git común, no por su ubicaci
 
 La interfaz filtra mientras se escribe, se pega o se borra texto.
 
-F2 o `pt settings` permiten activar **Buscar al abrir**. La preferencia se guarda fuera del catálogo y se aplica en la siguiente apertura de `pt` o `dash`. En ese modo, escribir siempre filtra, también después de moverse por la lista. ↑/↓ transfiere el foco y mueve la selección; Enter después abre el proyecto. Sin flechas se conserva la secuencia de dos Enter. Las letras se reservan para el filtro; Ctrl+A/E/D administran desde el dashboard, Ctrl+R actualiza, Ctrl+O ordena y Ctrl+C sale. Sin configuración previa se conserva el inicio manual con `/` y los atajos de letras.
+F2 o `pt settings` permiten activar **Buscar al abrir**. La preferencia se guarda fuera del catálogo y se aplica en la siguiente apertura de `pt` o `dash`. En ese modo, escribir siempre filtra, también después de moverse por la lista. ↑/↓ transfiere el foco y mueve la selección; Enter después abre el proyecto. Sin flechas se conserva la secuencia de dos Enter; Tab también devuelve el foco al listado y, una vez allí, abre el detalle. Las letras se reservan para el filtro; Ctrl+A/E/D administran desde el dashboard, Ctrl+R actualiza, Ctrl+O ordena y Ctrl+C sale. Sin configuración previa se conserva el inicio manual con `/` y los atajos de letras.
 
 En la misma pantalla, **Orden predeterminado** permite guardar registro, última visita, visitas o nombre para próximas aperturas. Se aplica a TUI, texto y JSON; `--sort` explícito tiene prioridad. Cambiar el orden con o/Ctrl+O afecta solo a la sesión actual.
 

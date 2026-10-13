@@ -294,12 +294,12 @@ func (b Browser) mainView() string {
 		}
 	}
 	if b.Mode == searching {
-		help = "↑↓ elegir · Enter ir al listado · Esc cancelar búsqueda · F2 ajustes"
-		if w < 64 {
-			help = "↑↓ elegir · Enter lista · Esc · F2"
+		help = "↑↓ elegir · Enter/Tab ir al listado · Esc cancelar búsqueda · F2 ajustes"
+		if w < 72 {
+			help = "↑↓ elegir · Enter/Tab lista · Esc · F2"
 		}
 		if w < 40 {
-			help = "↑↓ · Enter lista · Esc"
+			help = "↑↓ · Enter/Tab · Esc"
 		}
 	}
 	lines = append(lines, p.Muted.Render(fit(help, w)))

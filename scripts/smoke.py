@@ -302,6 +302,32 @@ printf '\n__PROJECTORY_NAVIGATION_OK__\n'
         assert locations()[0]["visits"] == len(shells) + 1, "settings changed visit accounting"
         print("PASS F2 settings, saved toggle, automatic search in list and dash, two-step Enter, and manual-search restoration")
 
+        # Tab leaves the search like Enter; only the next Tab opens the detail.
+        for search_on_open in ("false", "true"):
+            cli("settings", f"--search-on-open={search_on_open}")
+            for command in ([], ["list"], ["dash"]):
+                with Terminal([str(binary), *command, "--db", str(database), "--selection-file", str(chosen)], env, root) as terminal:
+                    terminal.expect("PROJECTORY")
+                    terminal.send("Pickmex" if search_on_open == "true" else "/Pickmex")
+                    terminal.expect("No hay proyectos que coincidan.")
+                    changed_at = len(terminal.output)
+                    terminal.send("\x7f")
+                    terminal.expect("> Pickme", after=changed_at)
+                    focused_at = len(terminal.output)
+                    terminal.send("\t")
+                    terminal.expect("Enter abrir", after=focused_at)
+                    assert terminal.process.poll() is None and not chosen.exists(), "first Tab selected a location"
+                    assert "Detalle" not in terminal.output[focused_at:].decode(errors="replace"), "first Tab opened the detail"
+                    terminal.send("\t")
+                    terminal.expect("Detalle del proyecto", after=focused_at)
+                    terminal.send("\t\r")  # Close the detail; Enter opens the focused result.
+                    terminal.finish()
+                assert chosen.read_bytes().split(b"\x00")[1] == str(target).encode()
+                chosen.unlink()
+        cli("settings", "--search-on-open=false")
+        assert locations()[0]["visits"] == len(shells) + 1, "Tab changed visit accounting"
+        print("PASS Tab focuses the filtered list before the detail in pt, list, and dash, with and without search on open")
+
         with Terminal([str(binary), "settings"], env, root, 40, 14) as terminal:
             terminal.expect("Orden predeterminado")
             terminal.send("\x1b[B\x1b[D")  # Select order; cycle backward from registration to name.

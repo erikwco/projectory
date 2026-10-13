@@ -112,6 +112,86 @@ func TestSearchArrowsFocusAndMoveThroughFilteredProjects(t *testing.T) {
 	}
 }
 
+func TestSearchTabFocusesFirstResultBeforeOpeningDetail(t *testing.T) {
+	for _, auto := range []bool{false, true} {
+		for _, dashboard := range []bool{false, true} {
+			b := browserWithSettings(t, auto, dashboard)
+			if !auto {
+				b = update(b, press('/'))
+			}
+			b = typeQuery(b, "o") // Both Dos and Uno match, in that order.
+			b = update(b, press(tea.KeyDown))
+			b = update(b, press('/'))
+			b = update(b, press(tea.KeyTab))
+			if b.Mode != browsing || b.Query.Focused() || b.Applied != "o" || b.Query.Value() != "o" || len(b.Visible) != 2 || b.Selected != 0 {
+				t.Fatal("Tab should commit the live filter and focus its first result, like Enter")
+			}
+			if b.Choice != nil || b.Picker != nil {
+				t.Fatal("first Tab selected a location")
+			}
+			b = update(b, press(tea.KeyTab))
+			if b.Mode != details || b.Selected != 0 {
+				t.Fatal("Tab from the list should open the detail of the focused result")
+			}
+			b = update(b, press(tea.KeyTab))
+			b = update(b, press(tea.KeyEnter))
+			if b.Choice == nil || b.Choice.ID != "two" {
+				t.Fatal("Enter after Tab should open the first result")
+			}
+		}
+	}
+}
+
+func TestSearchTabWithoutResultsOnlyFocusesList(t *testing.T) {
+	for _, auto := range []bool{false, true} {
+		b := browserWithSettings(t, auto, false)
+		if !auto {
+			b = update(b, press('/'))
+		}
+		b = typeQuery(b, "missing")
+		b = update(b, press(tea.KeyTab))
+		if b.Mode != browsing || b.Query.Focused() || b.Applied != "missing" {
+			t.Fatal("Tab on an empty search didn't focus the list")
+		}
+		b = update(b, press(tea.KeyTab))
+		b = update(b, press(tea.KeyEnter))
+		if b.Mode != browsing || b.Applied != "missing" || len(b.Visible) != 0 || b.Choice != nil {
+			t.Fatal("Tab on an empty search opened a detail or selected a location")
+		}
+	}
+}
+
+func TestAutomaticSearchResumesTypingAfterTab(t *testing.T) {
+	b := browserWithSettings(t, true, false)
+	b = typeQuery(b, "o")
+	b = update(b, press(tea.KeyTab))
+	if b.Mode != browsing {
+		t.Fatal("Tab didn't focus the list")
+	}
+	b = typeQuery(b, "s")
+	if b.Mode != searching || !b.Query.Focused() || b.Query.Value() != "os" || len(b.Visible) != 1 || b.Visible[0].Project.ID != "p2" {
+		t.Fatal("typing after Tab did not resume the committed query")
+	}
+}
+
+func TestSearchHelpKeepsFocusAndCancelKeysVisible(t *testing.T) {
+	for _, width := range []int{24, 25, 26, 39, 40, 71, 72, 80, 120} {
+		b := sampleBrowser(t)
+		b = update(b, press('/'))
+		b = update(b, tea.WindowSizeMsg{Width: width, Height: 24})
+		lines := strings.Split(b.View().Content, "\n")
+		help := lines[len(lines)-1]
+		for _, key := range []string{"Enter", "Tab", "Esc"} {
+			if !strings.Contains(help, key) {
+				t.Fatalf("search help at %d columns hides %s: %q", width, key, help)
+			}
+		}
+		if strings.Contains(help, "…") {
+			t.Fatalf("search help is truncated at %d columns: %q", width, help)
+		}
+	}
+}
+
 func TestSearchArrowsHandleEmptyResultsAndLeaveCursorKeysInInput(t *testing.T) {
 	b := browserWithSettings(t, true, false)
 	b = typeQuery(b, "missing")

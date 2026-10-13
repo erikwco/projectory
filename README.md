@@ -117,7 +117,7 @@ Abre el selector desde cualquier carpeta:
 pt
 ```
 
-Pulsa **/** y escribe para filtrar. **Enter** o **↑/↓** devuelven el foco al listado. Con el proyecto seleccionado, **Enter** entra en su carpeta. Si el proyecto tiene varias ubicaciones, se abre un selector para elegir una. **Tab** muestra el detalle y **q** sale sin cambiar de carpeta.
+Pulsa **/** y escribe para filtrar. **Enter**, **Tab** o **↑/↓** devuelven el foco al listado. Con el proyecto seleccionado, **Enter** entra en su carpeta. Si el proyecto tiene varias ubicaciones, se abre un selector para elegir una. En el listado, **Tab** muestra el detalle y **q** sale sin cambiar de carpeta.
 
 `pt ~` vuelve a tu carpeta personal sin abrir el catálogo.
 
