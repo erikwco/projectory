@@ -3,10 +3,12 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -26,9 +28,18 @@ type listOptions struct {
 	Plain, JSON      bool
 }
 
+// ErrCancelled reports that the person closed a prompt without choosing. The
+// command fails quietly so that `pt nombre && comando` does not continue.
+var ErrCancelled = errors.New("selección cancelada")
+
 func isTerminal(stream any) bool {
 	file, ok := stream.(*os.File)
 	return ok && term.IsTerminal(int(file.Fd()))
+}
+
+// interactive reports whether a prompt can be drawn and answered.
+func interactive(cmd *cobra.Command) bool {
+	return isTerminal(cmd.InOrStdin()) && isTerminal(cmd.OutOrStdout()) && isTerminal(cmd.ErrOrStderr())
 }
 
 func (s *settings) withApp(cmd *cobra.Command, run func(context.Context, *app.App) error) error {
@@ -50,7 +61,7 @@ func (s *settings) withApp(cmd *cobra.Command, run func(context.Context, *app.Ap
 
 func New(version string) *cobra.Command {
 	s := &settings{}
-	root := &cobra.Command{Use: "projectory", Short: "Tus proyectos, copias y worktrees en un solo catálogo", Version: version, SilenceUsage: true, SilenceErrors: true}
+	root := &cobra.Command{Use: "projectory [proyecto]", Short: "Tus proyectos, copias y worktrees en un solo catálogo", Long: "Tus proyectos, copias y worktrees en un solo catálogo.\n\nSin argumentos abre el selector. Con un nombre, ID, ruta o proyecto/etiqueta entra a esa ubicación\ncomo «go». Los subcomandos tienen prioridad: usa «go nombre» o «-- nombre» para un proyecto\nque se llame como un subcomando o empiece por guion.", Version: version, SilenceUsage: true, SilenceErrors: true}
 	root.SetIn(os.Stdin)
 	root.SetOut(os.Stdout)
 	root.SetErr(os.Stderr)
@@ -60,8 +71,29 @@ func New(version string) *cobra.Command {
 	_ = root.PersistentFlags().MarkHidden("selection-file")
 	rootList := &listOptions{}
 	listFlags(root, rootList)
-	root.Args = cobra.NoArgs
-	root.RunE = func(cmd *cobra.Command, args []string) error { return s.list(cmd, rootList, false) }
+	// A validator of its own stops Cobra from rejecting unknown words as
+	// commands; subcommands still win because Cobra dispatches them first.
+	root.Args = func(cmd *cobra.Command, args []string) error {
+		if len(args) > 1 {
+			return withSuggestion(cmd, args[0], fmt.Errorf("indica un solo proyecto; escribe entre comillas los nombres con espacios: pt %q", strings.Join(args, " ")))
+		}
+		return nil
+	}
+	root.RunE = func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return s.list(cmd, rootList, false)
+		}
+		for _, flag := range []string{"query", "tag", "sort", "json", "plain"} {
+			if cmd.Flags().Changed(flag) {
+				return withSuggestion(cmd, args[0], fmt.Errorf("--%s filtra el listado y no se combina con un proyecto; usa pt list --%s", flag, flag))
+			}
+		}
+		err := s.navigate(cmd, args[0])
+		if errors.Is(err, store.ErrNotFound) {
+			return withSuggestion(cmd, args[0], err)
+		}
+		return err
+	}
 	root.AddCommand(s.add(), s.listCommand(false), s.listCommand(true), s.goCommand(), s.edit(), s.remove(), s.refresh(), s.init(), s.visit(), s.backup(), s.info(), settingsCommand(), updateCommand(version))
 	return root
 }
@@ -102,7 +134,7 @@ func settingsCommand() *cobra.Command {
 			if err := config.Save(path, values); err != nil {
 				return err
 			}
-		} else if isTerminal(cmd.InOrStdin()) && isTerminal(cmd.OutOrStdout()) && isTerminal(cmd.ErrOrStderr()) {
+		} else if interactive(cmd) {
 			return tui.RunSettings(cmd.Context(), tui.NewSettings(path, values), cmd.InOrStdin(), cmd.ErrOrStderr())
 		}
 		state := "desactivado"
@@ -164,7 +196,7 @@ func (s *settings) list(cmd *cobra.Command, options *listOptions, dash bool) err
 		order = options.Sort
 	}
 	return s.withApp(cmd, func(ctx context.Context, a *app.App) error {
-		if options.Plain || options.JSON || !isTerminal(cmd.InOrStdin()) || !isTerminal(cmd.OutOrStdout()) || !isTerminal(cmd.ErrOrStderr()) {
+		if options.Plain || options.JSON || !interactive(cmd) {
 			locations, err := a.Store.List(ctx)
 			if err != nil {
 				return err
@@ -283,15 +315,76 @@ func (s *settings) add() *cobra.Command {
 	return cmd
 }
 
-func (s *settings) goCommand() *cobra.Command {
-	return &cobra.Command{Use: "go <id|ruta|proyecto/etiqueta>", Short: "Entrar directamente a una ubicación", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		return s.withApp(cmd, func(ctx context.Context, a *app.App) error {
-			l, err := a.Store.Resolve(ctx, args[0])
-			if err != nil {
-				return err
+// withSuggestion names the subcommand a mistyped word probably meant, so a
+// typo such as "lsit" is not silently treated only as a project.
+func withSuggestion(cmd *cobra.Command, word string, err error) error {
+	var suggestions []string
+	for _, sub := range cmd.Commands() {
+		if !sub.IsAvailableCommand() {
+			continue
+		}
+		for _, name := range append([]string{sub.Name()}, sub.Aliases...) {
+			if catalog.Resembles(word, name) {
+				suggestions = append(suggestions, sub.Name())
+				break
 			}
-			return s.selectLocation(cmd, &l)
-		})
+		}
+	}
+	if len(suggestions) > 0 {
+		return fmt.Errorf("%w; ¿querías el comando %s?", err, strings.Join(suggestions, ", "))
+	}
+	return err
+}
+
+// navigate enters an exactly named location directly. Approximate names and
+// names with several locations are confirmed in a prompt, never chosen alone.
+func (s *settings) navigate(cmd *cobra.Command, ref string) error {
+	return s.withApp(cmd, func(ctx context.Context, a *app.App) error {
+		locations, err := a.Store.List(ctx)
+		if err != nil {
+			return err
+		}
+		found := catalog.Navigate(locations, ref)
+		switch {
+		case len(found.Locations) == 0:
+			return fmt.Errorf("%w: ningún proyecto coincide con %q", store.ErrNotFound, ref)
+		case found.Exact && len(found.Locations) == 1:
+			return s.selectLocation(cmd, &found.Locations[0])
+		case !interactive(cmd) && found.Exact:
+			return fmt.Errorf("%q tiene varias ubicaciones; usa su ID, ruta o proyecto/etiqueta (pt list --plain los muestra)", ref)
+		case !interactive(cmd):
+			return fmt.Errorf("%q no es un nombre exacto; coincide con %s. Usa el nombre exacto, el ID o la ruta", ref, projectNames(found.Locations))
+		}
+		choice, err := tui.RunMatches(ctx, tui.NewMatches(ref, found), cmd.InOrStdin(), cmd.ErrOrStderr())
+		if err != nil {
+			return err
+		}
+		if choice == nil {
+			return ErrCancelled
+		}
+		return s.selectLocation(cmd, choice)
+	})
+}
+
+func projectNames(locations []catalog.Location) string {
+	const shown = 5
+	var names []string
+	seen := map[catalog.ProjectID]bool{}
+	for _, l := range locations {
+		if !seen[l.Project.ID] {
+			seen[l.Project.ID] = true
+			names = append(names, strconv.Quote(tui.Clean(l.Project.Name)))
+		}
+	}
+	if len(names) > shown {
+		return strings.Join(names[:shown], ", ") + fmt.Sprintf(" y %d más", len(names)-shown)
+	}
+	return strings.Join(names, ", ")
+}
+
+func (s *settings) goCommand() *cobra.Command {
+	return &cobra.Command{Use: "go <nombre|id|ruta|proyecto/etiqueta>", Short: "Entrar a una ubicación por nombre, ID o ruta", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		return s.navigate(cmd, args[0])
 	}}
 }
 

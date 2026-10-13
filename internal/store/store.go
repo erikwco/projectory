@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/erikwco/projectory/internal/catalog"
@@ -303,23 +302,15 @@ func (s *Store) List(ctx context.Context) ([]catalog.Location, error) {
 	return result, rows.Err()
 }
 
+// Resolve finds the single location named exactly by an ID, path, project
+// name, or proyecto/etiqueta. It never guesses: commands that change or remove
+// locations rely on it.
 func (s *Store) Resolve(ctx context.Context, ref string) (catalog.Location, error) {
 	locations, err := s.List(ctx)
 	if err != nil {
 		return catalog.Location{}, err
 	}
-	path, _ := catalog.NormalizePath(ref, false)
-	for _, l := range locations {
-		if string(l.ID) == ref || l.Path == path {
-			return l, nil
-		}
-	}
-	var matches []catalog.Location
-	for _, l := range locations {
-		if strings.EqualFold(l.Project.Name, ref) || strings.EqualFold(l.Project.Name+"/"+l.Label, ref) {
-			matches = append(matches, l)
-		}
-	}
+	matches := catalog.Exact(locations, ref)
 	if len(matches) == 1 {
 		return matches[0], nil
 	}

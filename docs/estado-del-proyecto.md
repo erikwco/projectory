@@ -30,7 +30,7 @@ La licencia es [MIT](../LICENSE). `main` solo acepta cambios mediante pull reque
 
 Las compilaciones de desarrollo se identifican con el sufijo `-dev`; las publicadas incorporan la versión del tag. El código usa Go 1.26 y declara `toolchain go1.26.9` en `go.mod`. Las dependencias directas están fijadas en ese archivo: Bubble Tea y Bubbles v2, Lip Gloss v2, Cobra, `modernc.org/sqlite`, `golang.org/x/term` y las utilidades ANSI de Charm.
 
-Los comandos implementados son `add`, `list`, `dash`, `go`, `edit`, `remove`, `refresh`, `backup`, `info`, `settings`, `update` e `init`. Sin subcomando se abre el selector. `_visit` y `--selection-file` son parte interna de la comunicación con el shell.
+Los comandos implementados son `add`, `list`, `dash`, `go`, `edit`, `remove`, `refresh`, `backup`, `info`, `settings`, `update` e `init`. Sin argumentos se abre el selector. `pt nombre` entra directamente con un nombre exacto de una ubicación y, si el nombre solo se parece o tiene varias ubicaciones, pide confirmación en una lista breve debajo del prompt. `edit` y `remove` solo aceptan referencias exactas. `_visit` y `--selection-file` son parte interna de la comunicación con el shell.
 
 El registro distingue proyectos y ubicaciones. Nombre, descripción y tags se comparten por proyecto; ruta, etiqueta, tecnologías y visitas pertenecen a cada ubicación. La corrección de una ruta conserva la identidad y el contador de visitas.
 
@@ -67,6 +67,7 @@ La integración con zsh y bash confirma el cambio de carpeta antes de sumar la v
 - `internal/shell/`: generación de la función `pt` para zsh y bash, con una ruta estable entre versiones de Homebrew.
 - `internal/update/`: consulta de releases, verificación de descargas y reemplazo del binario independiente.
 - `scripts/smoke.py`: pruebas del ejecutable real y de pseudoterminales.
+- `scripts/smoke_navigation.py`: navegación por nombre con el ejecutable real en zsh, bash y pseudoterminales.
 - `scripts/demo.py`: grabación de los GIF del README con datos ficticios; se ejecuta con `make demos`.
 - `scripts/preview.py`: capturas de revisión de la TUI real con datos temporales mediante VHS.
 - `scripts/check_public_files.py`: rechaza catálogos, credenciales, binarios y capturas de revisión versionados.
@@ -98,7 +99,7 @@ Las pruebas de desarrollo usan catálogos temporales. El catálogo del usuario q
 
 - `go test -race ./...`.
 - Compilación del ejecutable.
-- `python3 scripts/smoke.py`.
+- `python3 scripts/smoke.py` y `python3 scripts/smoke_navigation.py`.
 - `go vet ./...`.
 
 Las comprobaciones cubren persistencia, escrituras concurrentes, deduplicación, respaldos, edición atómica, worktrees externos, clones independientes, proyectos anidados, detección de tecnologías, búsqueda, cambio de tamaño y formularios.

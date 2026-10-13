@@ -45,6 +45,16 @@ Se compararon dos estructuras antes de implementar:
 - Expandir las rutas bajo la fila del proyecto. Mantiene todo en la lista, pero altera las posiciones al navegar y vuelve a introducir filas de ubicaciones entre proyectos.
 - Abrir un selector al activar el proyecto. Mantiene estable la lista, concentra el foco en la elección y usa el mismo flujo en paneles amplios y estrechos. Se eligió esta estructura, propuesta también por el usuario.
 
+## Coincidencias por nombre
+
+`pt nombre` y `pt go nombre` entran directamente cuando el nombre es exacto y tiene una sola ubicación. En los demás casos piden confirmación con una lista breve debajo del prompt. No ocupan toda la terminal, porque la persona ya escribió casi todo lo necesario y conserva a la vista su historial del shell. Al elegir o cancelar, la lista desaparece y no deja restos.
+
+La primera línea dice qué se busca, por ejemplo `Coincidencias para «tien»`, o, para un nombre exacto con varias rutas, el proyecto y su número de ubicaciones. A la derecha aparece la posición cuando hay más candidatos que filas. Cada fila muestra el proyecto, la etiqueta y, a la derecha, la rama o el tipo; con un nombre exacto, el proyecto se omite porque ya está en el título. La selección usa el mismo fondo turquesa y el indicador `>` del selector. Una línea discreta muestra la ruta de la selección. Si no cabe, conserva el final, que distingue mejor carpetas parecidas. El pie resume ↑↓, Enter y Esc.
+
+Se muestran hasta cinco filas. La ventana se desplaza con la selección, de modo que ninguna coincidencia ni ubicación del proyecto queda inaccesible. Las ubicaciones no disponibles aparecen atenuadas y marcadas como «no disponible»; Enter sobre ellas muestra un aviso en lugar de la ruta. La lista se adapta al tamaño: con menos filas muestra menos coincidencias y, por debajo de 24 columnas o 5 filas, un aviso sustituye la lista y bloquea Enter para no confirmar una selección que no se ve. Esc cancela siempre.
+
+Se descartó reutilizar el selector de ubicaciones a pantalla completa. Ese selector pertenece a un proyecto, mientras que una búsqueda aproximada mezcla varios, y abrir la pantalla completa para confirmar una palabra interrumpe más que una lista de pocas líneas.
+
 ## Estado y datos
 
 `projects.go` deriva grupos de ubicaciones del catálogo, sin cambiar SQLite. Cada grupo conserva IDs, visitas y disponibilidad de todas sus ubicaciones. El orden por visitas usa la suma del proyecto; los órdenes por registro y última visita usan la fecha más reciente del grupo.

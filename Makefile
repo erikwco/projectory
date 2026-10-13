@@ -16,6 +16,7 @@ test:
 
 smoke: build
 	python3 scripts/smoke.py
+	python3 scripts/smoke_navigation.py
 
 check: test smoke
 	$(GO) vet ./...
