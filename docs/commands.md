@@ -123,7 +123,7 @@ En la lista:
 - **Enter**: entrar en la ubicación seleccionada. La coincidencia disponible más cercana aparece preseleccionada.
 - **Esc**, **Ctrl+C**: cancelar con una sola pulsación.
 
-La lista muestra hasta cinco filas con el nombre, la etiqueta y la rama o el tipo. Se desplaza para alcanzar las demás y el título indica la posición. Debajo aparece la ruta de la selección; si no cabe, se conserva su final. Las carpetas no disponibles aparecen marcadas y no se pueden abrir. Con menos de 24 columnas o 5 filas, un aviso sustituye la lista y **Enter** no abre nada hasta ampliar la terminal.
+La lista muestra hasta cinco filas con el nombre, la etiqueta y la rama o el tipo. Se desplaza para alcanzar las demás y el título indica la posición. Debajo aparece la ruta de la selección; si no cabe, se conserva su final. Las carpetas no disponibles aparecen marcadas y no se pueden abrir. Con menos de 24 columnas o 5 filas, un aviso sustituye la lista y **Enter** no abre nada hasta ampliar la terminal. Si reduces la altura de la terminal con la lista abierta, o el ancho en una que reajusta las líneas como tmux, pueden quedar sobre el prompt filas de la lista anterior.
 
 Cancelar conserva la carpeta actual, no registra visitas y termina con un estado distinto de cero, sin mensaje de error. Así, `pt tienda && make` no ejecuta `make` si cancelas. Sin una terminal interactiva, por ejemplo en un script o una tubería, solo entran las referencias exactas de una ubicación. Un nombre aproximado o con varias ubicaciones termina con un error que nombra los candidatos, sin preguntar ni cambiar de carpeta.
 

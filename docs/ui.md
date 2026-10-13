@@ -47,7 +47,7 @@ Se compararon dos estructuras antes de implementar:
 
 ## Coincidencias por nombre
 
-`pt nombre` y `pt go nombre` entran directamente cuando el nombre es exacto y tiene una sola ubicación. En los demás casos piden confirmación con una lista breve debajo del prompt. No ocupan toda la terminal, porque la persona ya escribió casi todo lo necesario y conserva a la vista su historial del shell. Al elegir o cancelar, la lista desaparece y no deja restos.
+`pt nombre` y `pt go nombre` entran directamente cuando el nombre es exacto y tiene una sola ubicación. En los demás casos piden confirmación con una lista breve debajo del prompt. No ocupan toda la terminal, porque la persona ya escribió casi todo lo necesario y conserva a la vista su historial del shell. Al elegir o cancelar, la lista desaparece y no deja restos mientras la terminal conserva su tamaño. Si se reduce su altura con la lista abierta, o su ancho en una terminal que reajusta las líneas como tmux, pueden quedar sobre el prompt filas de la lista anterior; el historial previo se conserva.
 
 La primera línea dice qué se busca, por ejemplo `Coincidencias para «tien»`, o, para un nombre exacto con varias rutas, el proyecto y su número de ubicaciones. A la derecha aparece la posición cuando hay más candidatos que filas. Cada fila muestra el proyecto, la etiqueta y, a la derecha, la rama o el tipo; con un nombre exacto, el proyecto se omite porque ya está en el título. La selección usa el mismo fondo turquesa y el indicador `>` del selector. Una línea discreta muestra la ruta de la selección. Si no cabe, conserva el final, que distingue mejor carpetas parecidas. El pie resume ↑↓, Enter y Esc.
 

@@ -26,23 +26,23 @@ type Matches struct {
 	Dark, Done    bool
 	Notice        string
 	Choice        *catalog.Location
-	// Lines is the tallest preview drawn so far. The preview never gets
-	// shorter while it runs: Bubble Tea's inline renderer loses its first row
-	// when a frame shrinks and leaves the old rows on screen.
+	// Lines is the tallest preview drawn so far. The preview gets shorter
+	// only when the terminal does: Bubble Tea's inline renderer loses its
+	// first row when a frame shrinks and leaves the old rows on screen.
 	Lines int
 }
 
 // NewMatches preselects the closest available location. Locations arrive
-// already ordered by closeness.
+// already ordered by closeness. The size stays zero until Bubble Tea reports
+// the terminal's, so nothing is drawn or accepted for a guessed size.
 func NewMatches(query string, n catalog.Navigation) Matches {
-	m := Matches{Query: query, Exact: n.Exact, Locations: n.Locations, Width: 80, Height: 24, Dark: true}
+	m := Matches{Query: query, Exact: n.Exact, Locations: n.Locations, Dark: true}
 	for i, l := range m.Locations {
 		if l.Available {
 			m.Selected = i
 			break
 		}
 	}
-	m.Lines = m.height()
 	return m
 }
 
@@ -117,12 +117,20 @@ func fitPath(path string, width int) string {
 // View keeps the last frame when the person answers; RunMatches erases it
 // once the program has stopped drawing.
 func (m Matches) View() tea.View {
+	if m.Height == 0 {
+		return tea.NewView("")
+	}
 	content := m.content()
-	pad := m.Lines - strings.Count(content, "\n") - 1
-	// Padding goes below the preview. In a terminal shorter than the padded
-	// preview, the rows the renderer cuts from the top are blank instead.
-	above := min(max(0, pad), max(0, m.Lines-m.Height))
-	return tea.NewView(strings.Repeat("\n", above) + content + strings.Repeat("\n", max(0, pad-above)))
+	return tea.NewView(content + strings.Repeat("\n", max(0, m.frameLines()-strings.Count(content, "\n")-1)))
+}
+
+// frameLines is the height of the padded preview. It stays below the
+// terminal's: Bubble Tea redraws a taller frame on every tick, scrolling a
+// copy of it into the shell history each time, and a frame as tall as the
+// terminal is erased from the top left corner, which tmux also copies into
+// history. The content always fits, since rows leaves a row free.
+func (m Matches) frameLines() int {
+	return min(m.Lines, m.Height-1)
 }
 
 func (m Matches) content() string {
@@ -189,12 +197,12 @@ func RunMatches(ctx context.Context, m Matches, in io.Reader, out io.Writer) (*c
 }
 
 // erase removes the final frame once the program has stopped. Bubble Tea
-// leaves the cursor at the start of the frame's last row, and the frame is the
-// padded preview, cut to the terminal height. Going up to its first row and
-// erasing below keeps the shell history above it, on the main screen.
+// leaves the cursor at the start of the frame's last row. Going up to its
+// first row and erasing below keeps the shell history above it, on the main
+// screen.
 func (m Matches) erase(out io.Writer) error {
 	seq := "\r" + ansi.EraseScreenBelow
-	if up := min(m.Lines, m.Height) - 1; up > 0 {
+	if up := m.frameLines() - 1; up > 0 {
 		seq = "\r" + ansi.CursorUp(up) + ansi.EraseScreenBelow
 	}
 	_, err := io.WriteString(out, seq)

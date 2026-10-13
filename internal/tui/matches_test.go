@@ -57,7 +57,7 @@ func TestMatchesEnterChoosesPreselectedAvailableLocation(t *testing.T) {
 func TestMatchesRefusesUnavailableLocation(t *testing.T) {
 	found := sampleMatches(2)
 	found.Locations[1].Available = false
-	m := updateMatches(NewMatches("tien", found), press(tea.KeyDown))
+	m := updateMatches(NewMatches("tien", found), tea.WindowSizeMsg{Width: 80, Height: 24}, press(tea.KeyDown))
 	if !strings.Contains(plainView(m), "no disponible") {
 		t.Fatal("unavailable location is not marked")
 	}
@@ -79,6 +79,20 @@ func TestMatchesCancelWithEscOrCtrlC(t *testing.T) {
 		if cmd == nil || m.Choice != nil || !m.Done {
 			t.Fatalf("%s did not cancel cleanly", key)
 		}
+	}
+}
+
+func TestMatchesWaitsForTheTerminalSize(t *testing.T) {
+	m := NewMatches("tien", sampleMatches(8))
+	if m.View().Content != "" {
+		t.Fatal("the preview drew before knowing the terminal size")
+	}
+	if model, cmd := m.Update(press(tea.KeyEnter)); cmd != nil || model.(Matches).Choice != nil {
+		t.Fatal("Enter chose a location that was never shown")
+	}
+	m = updateMatches(m, tea.WindowSizeMsg{Width: 80, Height: 5})
+	if rows := strings.Count(m.View().Content, "\n") + 1; m.Lines != 4 || rows != 4 {
+		t.Fatalf("a five-row terminal needs a four-row preview: %d lines, %d rows", m.Lines, rows)
 	}
 }
 
@@ -106,12 +120,12 @@ func TestMatchesScrollsWithoutDroppingCandidates(t *testing.T) {
 
 func TestMatchesAdaptsToResizeAndBlocksHiddenChoice(t *testing.T) {
 	m := NewMatches("tien", sampleMatches(8))
-	for _, size := range []tea.WindowSizeMsg{{Width: 30, Height: 6}, {Width: 120, Height: 40}} {
+	for _, size := range []tea.WindowSizeMsg{{Width: 120, Height: 40}, {Width: 30, Height: 6}, {Width: 120, Height: 40}} {
 		m = updateMatches(m, size)
-		lines := strings.Split(strings.Trim(plainView(m), "\n"), "\n")
-		if len(lines) > size.Height-1 {
-			t.Fatalf("preview taller than the terminal at %v: %d lines", size, len(lines))
+		if rows := strings.Count(m.View().Content, "\n") + 1; rows > size.Height-1 {
+			t.Fatalf("preview taller than the terminal at %v: %d rows", size, rows)
 		}
+		lines := strings.Split(plainView(m), "\n")
 		for _, line := range lines {
 			if width := ansi.StringWidth(line); width > size.Width {
 				t.Fatalf("line wider than %d: %q", size.Width, line)
@@ -155,7 +169,7 @@ func TestMatchesExactTitleNamesProject(t *testing.T) {
 	found.Exact = true
 	found.Locations[1].Project = found.Locations[0].Project
 	found.Locations[1].Label = "copia"
-	view := plainView(NewMatches("Tienda A", found))
+	view := plainView(updateMatches(NewMatches("Tienda A", found), tea.WindowSizeMsg{Width: 80, Height: 24}))
 	if !strings.Contains(view, "Tienda A · 2 ubicaciones") || !strings.Contains(view, "> principal") || !strings.Contains(view, "copia") {
 		t.Fatalf("exact name with several locations:\n%s", view)
 	}
@@ -216,8 +230,8 @@ func TestMatchesProgramRendersInlineWithoutAlternateScreen(t *testing.T) {
 	}
 }
 
-// screen replays output the way a terminal without alternate screen shows it,
-// with the rows that scroll off the top kept as history. It knows only the
+// screen replays output the way tmux shows it without alternate screen, with
+// the rows that scroll off the top kept as history. It knows only the
 // sequences the preview uses and fails on any other, so a renderer change that
 // moves the cursor differently cannot pass unnoticed.
 type screen struct {
@@ -265,13 +279,44 @@ func (s *screen) clear(row, from int) {
 	}
 }
 
-// resize narrows or widens the screen without reflowing its rows, as xterm.
-func (s *screen) resize(width int) {
+// resize changes the size without reflowing rows. A shorter screen drops the
+// rows below the cursor and then moves rows from the top into history; a
+// taller one brings them back, as tmux does.
+func (s *screen) resize(width, height int) {
+	for len(s.rows) > height && s.y < len(s.rows)-1 {
+		s.rows = s.rows[:len(s.rows)-1]
+	}
+	for len(s.rows) > height {
+		s.history = append(s.history, strings.TrimRight(string(s.rows[0]), " "))
+		s.rows, s.y = s.rows[1:], s.y-1
+	}
+	for len(s.rows) < height {
+		if last := len(s.history) - 1; last >= 0 {
+			s.rows = append([][]rune{[]rune(s.history[last])}, s.rows...)
+			s.history, s.y = s.history[:last], s.y+1
+		} else {
+			s.rows = append(s.rows, nil)
+		}
+	}
 	for i, row := range s.rows {
 		row = append(row, []rune(strings.Repeat(" ", max(0, width-len(row))))...)
 		s.rows[i] = row[:width]
 	}
-	s.width, s.x = width, min(s.x, width-1)
+	s.width, s.height, s.x = width, height, min(s.x, width-1)
+}
+
+// clearAll is tmux's scroll-on-clear: erasing from the top left corner moves
+// the screen into history first.
+func (s *screen) clearAll() {
+	last := -1
+	for i, row := range s.rows {
+		if strings.TrimSpace(string(row)) != "" {
+			last = i
+		}
+	}
+	for _, row := range s.rows[:last+1] {
+		s.history = append(s.history, strings.TrimRight(string(row), " "))
+	}
 }
 
 func (s *screen) replay(out string) {
@@ -290,8 +335,10 @@ func (s *screen) replay(out string) {
 		case seq == "\n": // The renderer writes to a pipe here, which it treats as translating LF to CRLF.
 			s.newline()
 		case strings.HasPrefix(seq, "\x1b]9999;"): // The test's own marker for a resize.
-			w, _ := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(seq, "\x1b]9999;"), "\a"))
-			s.resize(w)
+			size := strings.Split(strings.TrimSuffix(strings.TrimPrefix(seq, "\x1b]9999;"), "\a"), ";")
+			w, _ := strconv.Atoi(size[0])
+			h, _ := strconv.Atoi(size[1])
+			s.resize(w, h)
 		case ansi.HasOscPrefix(seq), ansi.HasCsiPrefix(seq) && (cmd.Prefix() != 0 || cmd.Intermediate() != 0 || cmd.Final() == 'm'):
 			// Colors, styles, modes, and queries leave the cells and cursor alone.
 		case ansi.HasCsiPrefix(seq) && cmd.Final() == 'A':
@@ -307,6 +354,9 @@ func (s *screen) replay(out string) {
 		case ansi.HasCsiPrefix(seq) && cmd.Final() == 'K' && param(0) == 0:
 			s.clear(s.y, min(s.x, s.width))
 		case ansi.HasCsiPrefix(seq) && cmd.Final() == 'J' && param(0) == 0:
+			if s.x == 0 && s.y == 0 {
+				s.clearAll()
+			}
 			s.clear(s.y, min(s.x, s.width))
 			for row := s.y + 1; row < s.height; row++ {
 				s.clear(row, 0)
@@ -331,28 +381,43 @@ func (s *screen) text() ([]string, int) {
 }
 
 // The renderer and RunMatches' erase together must give back the screen as it
-// was, after scrolling, moving, resizing, cancelling, or choosing.
+// was, after scrolling, moving, resizing, cancelling, or choosing. When the
+// terminal gets shorter, it keeps the top rows of the taller preview, in
+// history or above the shorter one, and only those may stay behind. Every
+// frame must also be the last output until the next event: a frame taller
+// than the terminal makes the renderer redraw, and scroll, on every tick.
 func TestMatchesProgramLeavesNoRowsBehind(t *testing.T) {
 	history := []string{"$ ls", "notas.txt", "$ cd ~/dev", "$ pt tien"}
+	size := func(width, height int) tea.WindowSizeMsg { return tea.WindowSizeMsg{Width: width, Height: height} }
 	cases := []struct {
 		name   string
+		height int
 		events []any
 		choice catalog.LocationID
+		kept   int
 	}{
-		{"cancel", []any{press(tea.KeyDown), press(tea.KeyEscape)}, ""},
-		{"ctrl+c", []any{tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}}, ""},
-		{"choose", []any{press(tea.KeyDown), press(tea.KeyDown), press(tea.KeyEnter)}, "lC"},
-		{"narrow and widen", []any{20, 80, press(tea.KeyDown), press(tea.KeyEscape)}, ""},
-		{"stay narrow", []any{press(tea.KeyDown), 20, press(tea.KeyEscape)}, ""},
+		{"cancel", 10, []any{press(tea.KeyDown), press(tea.KeyEscape)}, "", 0},
+		{"ctrl+c", 10, []any{tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}}, "", 0},
+		{"choose", 10, []any{press(tea.KeyDown), press(tea.KeyDown), press(tea.KeyEnter)}, "lC", 0},
+		{"narrow and widen", 10, []any{size(20, 10), size(80, 10), press(tea.KeyDown), press(tea.KeyEscape)}, "", 0},
+		{"stay narrow", 10, []any{press(tea.KeyDown), size(20, 10), press(tea.KeyEscape)}, "", 0},
+		{"open short", 5, []any{press(tea.KeyDown), press(tea.KeyEscape)}, "", 0},
+		{"open too short", 4, []any{press(tea.KeyEscape)}, "", 0},
+		{"shrink", 10, []any{size(80, 5), press(tea.KeyDown), press(tea.KeyEscape)}, "", 4},
+		{"shrink and grow", 10, []any{size(80, 5), size(80, 10), press(tea.KeyDown), press(tea.KeyEnter)}, "lB", 4},
+		{"shrink below the list", 10, []any{size(80, 4), press(tea.KeyEscape)}, "", 5},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			out := &lockedBuffer{}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			program := tea.NewProgram(NewMatches("tien", sampleMatches(8)), tea.WithContext(ctx), tea.WithInput(nil), tea.WithOutput(out), tea.WithWindowSize(80, 10))
-			done := make(chan Matches, 1)
+			program := tea.NewProgram(NewMatches("tien", sampleMatches(8)), tea.WithContext(ctx), tea.WithInput(nil), tea.WithOutput(out), tea.WithWindowSize(80, c.height))
+			done, exited := make(chan Matches, 1), make(chan struct{})
+			// A failed check stops the program before the test ends.
+			defer func() { cancel(); <-exited }()
 			go func() {
+				defer close(exited)
 				model, err := program.Run()
 				if err != nil {
 					t.Error(err)
@@ -369,22 +434,38 @@ func TestMatchesProgramLeavesNoRowsBehind(t *testing.T) {
 					}
 				}
 			}
-			wait("the preview never rendered", func() bool { return strings.Contains(out.String(), "Coincidencias") })
-			// Each event waits for its frame, as a person would. An int is a
-			// new terminal width; the marker tells the screen when it applies.
-			for _, event := range c.events {
-				switch event := event.(type) {
-				case int:
-					_, _ = fmt.Fprintf(out, "\x1b]9999;%d\a", event)
-					mark := len(out.String())
-					program.Send(tea.WindowSizeMsg{Width: event, Height: 10})
-					wait("the resize drew nothing", func() bool { return len(out.String()) > mark })
-				case tea.KeyPressMsg:
-					mark := len(out.String())
-					program.Send(event)
-					wait(event.String()+" drew nothing", func() bool { return len(out.String()) > mark })
+			// settle waits until the output has been quiet for a while, far
+			// longer than the renderer's ticks.
+			settle := func(what string) {
+				last, quiet, deadline := len(out.String()), time.Now(), time.Now().Add(3*time.Second)
+				for time.Since(quiet) < 150*time.Millisecond {
+					if time.Now().After(deadline) {
+						t.Fatalf("%s: the preview kept redrawing, %d bytes", what, last)
+					}
+					time.Sleep(10 * time.Millisecond)
+					if n := len(out.String()); n != last {
+						last, quiet = n, time.Now()
+					}
 				}
-				time.Sleep(50 * time.Millisecond)
+			}
+			wait("the preview never rendered", func() bool {
+				return strings.Contains(out.String(), "Amplía") || strings.Contains(out.String(), "Coincidencias")
+			})
+			settle("the first frame")
+			// Each event waits for its frame, as a person would. The marker
+			// tells the screen when a new terminal size applies.
+			for _, event := range c.events {
+				mark := len(out.String())
+				switch event := event.(type) {
+				case tea.WindowSizeMsg:
+					_, _ = fmt.Fprintf(out, "\x1b]9999;%d;%d\a", event.Width, event.Height)
+					mark = len(out.String())
+					program.Send(event)
+				case tea.KeyPressMsg:
+					program.Send(event)
+				}
+				wait(fmt.Sprint(event, " drew nothing"), func() bool { return len(out.String()) > mark })
+				settle(fmt.Sprint(event))
 			}
 			final := <-done
 			if err := final.erase(out); err != nil {
@@ -393,10 +474,15 @@ func TestMatchesProgramLeavesNoRowsBehind(t *testing.T) {
 			if final.Choice == nil && c.choice != "" || final.Choice != nil && final.Choice.ID != c.choice {
 				t.Fatalf("wrong choice: %+v", final.Choice)
 			}
-			term := newScreen(t, 80, 10, history...)
+			term := newScreen(t, 80, c.height, history...)
 			term.replay(out.String())
 			lines, row := term.text()
-			if !slices.Equal(lines, history) || row != len(history) || term.x != 0 {
+			first := strings.Split(plainView(updateMatches(NewMatches("tien", sampleMatches(8)), size(80, c.height))), "\n")
+			want := slices.Clone(history)
+			for _, line := range first[:c.kept] {
+				want = append(want, strings.TrimRight(line, " "))
+			}
+			if !slices.Equal(lines, want) || row != len(want) || term.x != 0 {
 				t.Fatalf("the preview left rows or moved the prompt (cursor row %d, column %d):\n%s", row, term.x, strings.Join(lines, "\n"))
 			}
 		})
