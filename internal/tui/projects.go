@@ -44,8 +44,8 @@ func groupProjects(locations []catalog.Location, query, tag, order string) ([]pr
 	for _, g := range groups {
 		sort.SliceStable(g.Locations, func(i, j int) bool {
 			a, b := g.Locations[i], g.Locations[j]
-			if locationRank(a) != locationRank(b) {
-				return locationRank(a) < locationRank(b)
+			if catalog.LocationRank(a) != catalog.LocationRank(b) {
+				return catalog.LocationRank(a) < catalog.LocationRank(b)
 			}
 			return a.Path < b.Path
 		})
@@ -88,16 +88,6 @@ func groupProjects(locations []catalog.Location, query, tag, order string) ([]pr
 		return a.Project.ID < b.Project.ID
 	})
 	return visible, total
-}
-
-func locationRank(l catalog.Location) int {
-	if l.Kind == catalog.Worktree {
-		return 2
-	}
-	if l.Label == "principal" {
-		return 0
-	}
-	return 1
 }
 
 func (g projectGroup) preferredIndex() int {

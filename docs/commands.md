@@ -29,7 +29,7 @@ pt list --plain
 pt list --json
 ```
 
-Sin subcomando, `pt` abre el selector. Tanto el selector como el dashboard muestran una entrada por proyecto, con círculos discretos que indican sus ubicaciones. Las etiquetas, las ramas, las rutas y el conteo exacto se muestran en el detalle y al elegir una ubicación.
+Sin argumentos, `pt` abre el selector. Tanto el selector como el dashboard muestran una entrada por proyecto, con círculos discretos que indican sus ubicaciones. Las etiquetas, las ramas, las rutas y el conteo exacto se muestran en el detalle y al elegir una ubicación.
 
 Los órdenes disponibles son `added` (registro), `visited` (última visita), `visits` (más visitas) y `name` (nombre de A a Z). Sin configuración previa se usa `added`, del registro más reciente al más antiguo. **Orden predeterminado** en F2 cambia ese valor para futuras aperturas. Un `--sort` explícito tiene prioridad sobre el ajuste guardado. En la TUI, `added` y `visited` usan la fecha más reciente entre las ubicaciones del proyecto; `visits` suma sus visitas.
 
@@ -97,14 +97,55 @@ El archivo contiene la clave booleana `search_on_open` y la clave opcional `defa
 
 ```sh
 pt ~
+pt tienda
+pt "Mi Tienda"
 pt go ID
 pt go /ruta/registrada
 pt go "Tienda/copia 2025"
 ```
 
-`pt ~` vuelve a tu carpeta personal mediante la función del shell, sin abrir SQLite ni registrar una visita. También acepta `pt '~'` y `pt "$HOME"`, siempre como único argumento. `pt` sin argumentos sigue abriendo el selector. Si ya tenías una terminal abierta al instalar esta función, vuelve a activarla con `eval "$("$HOME/.local/bin/projectory" init zsh)"` (o `bash`).
+`pt REFERENCIA` y `pt go REFERENCIA` siguen las mismas reglas. Un ID, una ruta registrada, `proyecto/etiqueta` o el nombre exacto de un proyecto con una sola ubicación entran directamente. Los nombres se comparan sin distinguir mayúsculas y minúsculas. Escribe entre comillas los nombres con espacios; varias palabras sin comillas producen un error.
 
-Un nombre de proyecto también funciona si solo tiene una ubicación. Si hay varias coincidencias, el comando pide un ID o una ruta. La visita se registra después de que el shell confirme el cambio de directorio.
+Si el nombre exacto tiene varias ubicaciones, o si la referencia solo se parece a un nombre, aparece una lista breve debajo del prompt, sin ocupar toda la terminal. Una coincidencia aproximada siempre pide confirmación, aunque sea la única. El orden depende de la cercanía:
+
+1. Nombres que empiezan por el texto escrito.
+2. Nombres con palabras que empiezan así, en orden, como `tien` para «Mi Tienda».
+3. Nombres que contienen el texto.
+4. Etiquetas y nombres de carpeta, con los mismos criterios.
+5. Errores de tecleo en el nombre y después en la etiqueta o la carpeta, como `blgo` para «Blog». La tolerancia depende de la longitud: ninguna por debajo de tres caracteres, un error hasta cinco y dos a partir de seis.
+
+Las mayúsculas, los espacios y la puntuación no cuentan: `mi-tienda` se parece a «Mi Tienda», pero pide confirmación. Dentro de un mismo nivel aparecen antes las coincidencias más tempranas y los nombres más cortos; los empates se ordenan por nombre y ruta. Las visitas no alteran el orden. Un proyecto coincidente conserva todas sus ubicaciones. Si nada se parece, el comando termina con un error.
+
+En la lista:
+
+- **↑/↓**, **Tab**/**Shift+Tab**, **j**/**k**: elegir.
+- **Inicio**, **Fin**: ir a la primera o a la última coincidencia.
+- **Enter**: entrar en la ubicación seleccionada. La coincidencia disponible más cercana aparece preseleccionada.
+- **Esc**, **Ctrl+C**: cancelar con una sola pulsación.
+
+La lista muestra hasta cinco filas con el nombre, la etiqueta y la rama o el tipo. Se desplaza para alcanzar las demás y el título indica la posición. Debajo aparece la ruta de la selección; si no cabe, se conserva su final. Las carpetas no disponibles aparecen marcadas y no se pueden abrir. Con menos de 24 columnas o 5 filas, un aviso sustituye la lista y **Enter** no abre nada hasta ampliar la terminal. Si reduces la altura de la terminal con la lista abierta, o el ancho en una que reajusta las líneas como tmux, pueden quedar sobre el prompt filas de la lista anterior.
+
+Cancelar conserva la carpeta actual, no registra visitas y termina con un estado distinto de cero, sin mensaje de error. Así, `pt tienda && make` no ejecuta `make` si cancelas. Sin una terminal interactiva, por ejemplo en un script o una tubería, solo entran las referencias exactas de una ubicación. Un nombre aproximado o con varias ubicaciones termina con un error que nombra los candidatos, sin preguntar ni cambiar de carpeta.
+
+Los subcomandos tienen prioridad: `pt add` registra una carpeta aunque exista un proyecto llamado «add». Para entrar en ese proyecto, usa `pt go add` o `pt -- add`. `--` también admite nombres que empiezan por guion, como `pt -- -beta`; las opciones como `--db` van antes de `--`. Si un nombre sin coincidencias se parece a un subcomando, el error lo sugiere. `--query`, `--tag`, `--sort`, `--json` y `--plain` pertenecen al listado y no se combinan con una referencia.
+
+`edit` y `remove` no usan coincidencias aproximadas. Requieren un ID, una ruta, `proyecto/etiqueta` o el nombre exacto de un proyecto con una sola ubicación.
+
+`pt ~` vuelve a tu carpeta personal mediante la función del shell, sin abrir SQLite ni registrar una visita. También acepta `pt '~'` y `pt "$HOME"`, siempre como único argumento. `pt` sin argumentos sigue abriendo el selector.
+
+La navegación por nombre requiere la función generada por esta versión. Si ya tenías una terminal abierta al instalar o actualizar, vuelve a activarla en ella con la ruta de tu instalación. Con Homebrew:
+
+```sh
+eval "$("$(brew --prefix)/opt/projectory/bin/projectory" init zsh)"
+```
+
+Con una instalación manual o `make install`:
+
+```sh
+eval "$("$HOME/.local/bin/projectory" init zsh)"
+```
+
+En bash, cambia `zsh` por `bash`. Si instalaste con otro `PREFIX`, usa esa ruta. Una función anterior sigue entrando con `pt go`, pero con `pt nombre` solo imprime la ruta. La visita se registra después de que el shell confirme el cambio de directorio.
 
 Las visitas cuentan entradas mediante `pt`. Un `cd` manual no modifica el contador. El ejecutable sin la función del shell imprime la ruta seleccionada y no puede cambiar el directorio de su proceso padre.
 

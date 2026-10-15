@@ -11,7 +11,7 @@ Funciona con zsh y bash en macOS y Linux, tanto en Intel/AMD de 64 bits como en 
 
 ## Para qué sirve
 
-- Entrar a un proyecto sin recordar dónde está: escribes parte del nombre, la ruta, la rama o un tag y pulsas Enter.
+- Entrar a un proyecto sin recordar dónde está: escribes parte del nombre, la ruta, la rama o un tag y pulsas Enter, o escribes `pt tienda` directamente.
 - Reunir en una sola entrada un repositorio y sus worktrees, aunque estén en carpetas alejadas.
 - Agrupar copias o clones independientes del mismo proyecto.
 - Consultar la rama, los cambios pendientes y las tecnologías detectadas de cada ubicación.
@@ -119,6 +119,15 @@ pt
 
 Pulsa **/** y escribe para filtrar. **Enter**, **Tab** o **↑/↓** devuelven el foco al listado. Con el proyecto seleccionado, **Enter** entra en su carpeta. Si el proyecto tiene varias ubicaciones, se abre un selector para elegir una. En el listado, **Tab** muestra el detalle y **q** sale sin cambiar de carpeta.
 
+También puedes entrar por nombre:
+
+```sh
+pt tienda
+pt "Mi Tienda"
+```
+
+Un nombre exacto con una sola ubicación entra directamente. Si el nombre solo se parece, por ejemplo con un error de tecleo, o si el proyecto tiene varias ubicaciones, aparece una lista breve debajo del prompt: **↑/↓** elige, **Enter** entra y **Esc** cancela sin cambiar de carpeta. Escribe entre comillas los nombres con espacios. Los subcomandos tienen prioridad: un proyecto llamado `add` se abre con `pt go add`.
+
 `pt ~` vuelve a tu carpeta personal sin abrir el catálogo.
 
 ## Worktrees y copias
@@ -173,7 +182,8 @@ pt settings --default-sort=name
 | `pt` o `pt list` | Abrir el selector y entrar a una carpeta. |
 | `pt dash` | Administrar el catálogo y ver visitas. |
 | `pt add` | Registrar una carpeta y sus worktrees. |
-| `pt go ID` | Entrar directamente a una ubicación por ID, ruta o nombre. |
+| `pt NOMBRE` | Entrar por nombre; si no es exacto, elegir entre las coincidencias. |
+| `pt go NOMBRE` | Lo mismo para nombres que coinciden con un subcomando; también acepta ID o ruta. |
 | `pt edit ID` | Cambiar metadatos o corregir una ruta. |
 | `pt remove ID` | Quitar una ubicación del catálogo sin borrar archivos. |
 | `pt refresh` | Actualizar tecnologías, ramas y worktrees. |

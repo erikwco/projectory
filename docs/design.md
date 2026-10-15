@@ -42,13 +42,31 @@ El directorio de trabajo pertenece a cada proceso. El binario puede cambiar el s
 
 El atajo `pt ~` se resuelve en la función, antes de llamar al binario. Reconoce un único argumento: el carácter `~` literal o la ruta personal ya expandida por el shell. Ejecuta `builtin cd` sin argumentos, conserva su código de salida y no abre SQLite ni registra una visita. Las funciones cargadas antes de una actualización requieren ejecutar de nuevo `init` para incorporar cambios en esta integración.
 
-Para navegar, la función crea un archivo temporal privado y ejecuta el selector. El binario escribe el ID de la ubicación, la ruta y el archivo del catálogo separados por NUL. La interfaz se dibuja en la terminal por separado.
+La función crea un archivo temporal privado y lo pasa a cualquier comando con `--selection-file=`, antes de los argumentos de la persona. El binario escribe en él el ID de la ubicación, la ruta y el archivo del catálogo separados por NUL solo cuando hay que cambiar de carpeta; la función decide por el contenido del archivo y no mantiene su propia lista de comandos de navegación. Al ir antes de los argumentos, el flag no rompe `--`, que separa nombres que empiezan por guion. Las funciones generadas por versiones anteriores añadían el flag al final y solo para `list`, `dash`, `go` y las opciones; el binario actual sigue atendiéndolas. La interfaz se dibuja en la terminal por separado.
+
+Como todos los comandos reciben el archivo, cualquier `pt`, incluido `pt add` o `pt list --plain`, necesita un `TMPDIR` con permiso de escritura (o `/tmp` si no está definido). Si `mktemp` falla, la función termina con error sin llamar al binario. Es una decisión deliberada: ejecutar el comando sin archivo haría que una navegación terminara sin cambiar de carpeta y sin avisar, y volver a decidir por el nombre del comando duplicaría en el shell la lista de comandos que navegan. En ese caso, corrige `TMPDIR` o llama a `projectory` directamente.
 
 La función lee esos campos como datos y ejecuta `builtin cd` con la ruta entre comillas. No evalúa nombres ni rutas como código. El catálogo viaja en el mismo resultado para que un `--db` relativo siga apuntando al archivo correcto después del cambio de directorio.
 
 Después de un `cd` exitoso, la función pide al binario que incremente la visita. Si SQLite falla en ese momento, la navegación permanece y el shell muestra que no pudo registrar la visita. No existe una transacción atómica que abarque a la vez el directorio del shell y SQLite.
 
-Cancelar el selector produce una selección vacía. La función conserva el directorio actual y elimina su archivo temporal.
+Cancelar el selector produce una selección vacía. La función conserva el directorio actual y elimina su archivo temporal. Cancelar la lista de coincidencias por nombre, además, termina con un estado distinto de cero: `ErrCancelled` evita el mensaje de error, pero impide que `pt nombre && comando` continúe. El selector general conserva su salida con estado cero.
+
+## Navegación por nombre
+
+`catalog.Exact` reúne lo que una referencia nombra sin adivinar: un ID o una ruta, que identifican una ubicación, o un nombre de proyecto o `proyecto/etiqueta`, que pueden identificar varias. `store.Resolve` lo usa para `edit` y `remove` y sigue rechazando nombres ambiguos o aproximados. `catalog.Navigate` usa la misma coincidencia exacta y, si no hay ninguna, `catalog.Approximate` ordena por cercanía. Es lógica pura sobre las ubicaciones ya leídas, sin SQLite ni terminal. Un error al abrir o leer el catálogo se devuelve como tal y no se confunde con la falta de coincidencias.
+
+La cercanía usa niveles fijos: el nombre del proyecto antes que la etiqueta o la carpeta, y prefijos, palabras y subcadenas antes que los errores de tecleo. La distancia de edición cuenta inserciones, borrados, sustituciones y transposiciones de letras vecinas, con un límite según la longitud. Las visitas no intervienen: un proyecto frecuente no debe desplazar a uno más parecido, y el mismo catálogo produce siempre el mismo orden.
+
+La raíz de Cobra acepta un argumento opcional. Cobra resuelve primero los subcomandos, así que los nombres reservados siguen ejecutando su comando; `go` y `--` permiten llegar a un proyecto con ese nombre. Sin coincidencias, la CLI sugiere el subcomando que se parece a lo escrito con la misma tolerancia. Varias palabras sin comillas producen un error en lugar de unirse, porque unirlas ocultaría errores de comillas en el shell.
+
+`pt nombre` y `pt go nombre` comparten `navigate`. Una coincidencia exacta y única llega directamente a `selectLocation`, que vuelve a comprobar que la carpeta existe antes de escribir la selección. Cualquier otro resultado necesita stdin, stdout y stderr interactivos, como el selector; sin ellos termina con un error que nombra los candidatos. `tui.Matches` es un modelo pequeño de Bubble Tea que se dibuja en línea, sin pantalla alternativa, y reutiliza `Clean`, los estilos y el ajuste de ancho del resto de la interfaz.
+
+El renderizador en línea de Bubble Tea 2.0 pierde la primera fila de la vista cuando un cuadro tiene menos filas que el anterior: borra desde la fila del cursor y deja en la terminal las filas de arriba. Por eso `Matches` solo se encoge cuando la terminal pierde altura: rellena con filas vacías hasta la altura máxima que ha mostrado, y al responder conserva el último cuadro en lugar de devolver una vista vacía. Cuando el programa termina, el cursor queda al inicio de la última fila de ese cuadro; `RunMatches` sube hasta su primera fila y borra hacia abajo. La lista desaparece sin limpiar la pantalla completa ni tocar el historial del shell.
+
+El cuadro deja libre al menos una fila de la terminal. Si fuera más alto, el renderizador lo recortaría y lo volvería a dibujar en cada tic, y cada dibujo empujaría una copia al historial. Si ocupara toda la altura, se borraría desde la esquina superior izquierda, y tmux copia la pantalla al historial antes de ese borrado. `Matches` tampoco dibuja nada hasta recibir el primer `WindowSizeMsg`, para no partir de un tamaño supuesto.
+
+Reducir la altura con la lista abierta deja restos que el programa no controla: la terminal mueve al historial las filas superiores del cuadro anterior o las conserva encima del nuevo, fuera del alcance del renderizador en línea. Lo mismo ocurre al estrechar una terminal que reajusta las líneas, como tmux, que reparte cada fila en varias. El historial anterior a la lista se conserva. `TestMatchesProgramLeavesNoRowsBehind` reproduce la salida real del renderizador en una pantalla con historial que cambia de altura como tmux. Comprueba que no quedan filas al cancelar, elegir, abrir en una terminal baja o cambiar el ancho sin reajustar las líneas; que al reducir la altura solo quedan las filas superiores del primer cuadro, y que la salida se detiene después de cada cuadro.
 
 ## Catálogo local y actualizaciones
 
@@ -63,6 +81,8 @@ El registro de un proyecto y las actualizaciones son operaciones explícitas. La
 Los tests de Go crean repositorios temporales para comprobar worktrees en carpetas separadas, clones independientes, estados sin rama y proyectos anidados. Los tests de SQLite comprueban persistencia, concurrencia, reversión de ediciones y respaldos.
 
 `scripts/smoke.py` ejecuta el binario real en zsh, bash y pseudoterminales. Comprueba la secuencia de búsqueda, el cambio de tamaño, el cambio de directorio del shell, las visitas y los formularios. Las rutas de prueba incluyen espacios, comillas, caracteres de shell y saltos de línea.
+
+`scripts/smoke_navigation.py` reutiliza su terminal de pruebas para la navegación por nombre en zsh y bash: entradas exactas, nombres reservados, `--`, rechazo sin terminal, confirmación con Enter, cancelación con Esc y Ctrl+C, varias ubicaciones y cambio de tamaño. Comprueba que solo una confirmación cambia la carpeta y suma una visita, que no quedan archivos de selección y que una ruta con código de shell no se ejecuta. También carga la función de la versión 1.0.0 con el binario actual.
 
 ## Distribución y actualización del ejecutable
 
