@@ -48,7 +48,7 @@ Las líneas discretas separan proyectos y el fondo de color destaca la selecció
 
 Los formularios de creación y edición usan una columna centrada, un campo activo resaltado y un pie fijo con las acciones. En terminales pequeñas muestran menos campos y conservan visible el cursor, incluso en rutas largas. Los errores de campos obligatorios enfocan el campo pendiente y desaparecen al corregirlo.
 
-Quitar un registro conserva los archivos. Un worktree quitado queda excluido de `refresh` hasta que se registre explícitamente otra vez. Las carpetas desaparecidas permanecen en el catálogo como no disponibles.
+Quitar un registro conserva los archivos. Un worktree quitado queda excluido de `refresh` hasta que se registre explícitamente otra vez. Al intentar abrir una carpeta desaparecida, se ofrece quitar solo esa ubicación con confirmación. Cancelar o quitar conserva la carpeta actual y las visitas; si la carpeta reaparece antes de confirmar, conserva también el registro. Los errores de permisos y las rutas que son archivos no ofrecen esta limpieza. Sin terminal interactiva, el error indica cómo quitar el registro por ID.
 
 La integración con zsh y bash confirma el cambio de carpeta antes de sumar la visita. Solo cuenta entradas realizadas mediante la función `pt`. Un `cd` manual no aumenta el contador.
 

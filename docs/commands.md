@@ -127,6 +127,10 @@ La lista muestra hasta cinco filas con el nombre, la etiqueta y la rama o el tip
 
 Cancelar conserva la carpeta actual, no registra visitas y termina con un estado distinto de cero, sin mensaje de error. Así, `pt tienda && make` no ejecuta `make` si cancelas. Sin una terminal interactiva, por ejemplo en un script o una tubería, solo entran las referencias exactas de una ubicación. Un nombre aproximado o con varias ubicaciones termina con un error que nombra los candidatos, sin preguntar ni cambiar de carpeta.
 
+Si la carpeta ya no existe, intentar abrirla ofrece quitar esa ubicación del catálogo. **s/y** confirma y **Enter/Esc** cancela. Cancelar desde la lista de coincidencias vuelve a esa lista; cancelar la confirmación directa de una sola ubicación termina el comando. Quitar desde `pt nombre` o `pt go` también termina con estado distinto de cero para impedir comandos encadenados. En `list` y `dash`, la interfaz sigue abierta. Cancelar o quitar conserva la carpeta actual y las visitas.
+
+Si la carpeta reaparece antes de confirmar, se conserva el registro sin navegar. Sin terminal interactiva, el error indica un comando `projectory remove` por ID con el mismo `--db` si se especificó. Los errores de permisos y las rutas que son archivos no ofrecen esta limpieza.
+
 Los subcomandos tienen prioridad: `pt add` registra una carpeta aunque exista un proyecto llamado «add». Para entrar en ese proyecto, usa `pt go add` o `pt -- add`. `--` también admite nombres que empiezan por guion, como `pt -- -beta`; las opciones como `--db` van antes de `--`. Si un nombre sin coincidencias se parece a un subcomando, el error lo sugiere. `--query`, `--tag`, `--sort`, `--json` y `--plain` pertenecen al listado y no se combinan con una referencia.
 
 `edit` y `remove` no usan coincidencias aproximadas. Requieren un ID, una ruta, `proyecto/etiqueta` o el nombre exacto de un proyecto con una sola ubicación.
@@ -164,7 +168,7 @@ Nombre, descripción y tags se comparten entre las ubicaciones del proyecto. Eti
 
 `remove`, también disponible como `rm`, quita la ubicación del catálogo y conserva sus archivos. Si era la última ubicación, también quita los metadatos del proyecto. Fuera de una terminal interactiva requiere `--yes`.
 
-Un worktree quitado queda excluido del descubrimiento automático. Registrarlo explícitamente con `add` lo restaura. Una carpeta desaparecida permanece en el catálogo como no disponible.
+Un worktree quitado queda excluido del descubrimiento automático. Registrarlo explícitamente con `add` lo restaura. Una carpeta desaparecida permanece en el catálogo como no disponible hasta que confirmes quitarla, ya sea al intentar abrirla o con `remove`.
 
 ## Actualización y Git
 
