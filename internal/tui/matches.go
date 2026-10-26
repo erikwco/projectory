@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/erikwco/projectory/internal/app"
 	"github.com/erikwco/projectory/internal/catalog"
 )
 
@@ -18,6 +20,8 @@ const matchRows = 5
 // Matches asks which location a typed name means. It renders inline, below the
 // shell prompt, instead of taking over the terminal like the browser.
 type Matches struct {
+	App           *app.App
+	Context       context.Context
 	Query         string
 	Exact         bool
 	Locations     []catalog.Location
@@ -26,6 +30,10 @@ type Matches struct {
 	Dark, Done    bool
 	Notice        string
 	Choice        *catalog.Location
+	missing       *app.MissingLocation
+	direct, busy  bool
+	completion    string
+	err           error
 	// Lines is the tallest preview drawn so far. The preview gets shorter
 	// only when the terminal does: Bubble Tea's inline renderer loses its
 	// first row when a frame shrinks and leaves the old rows on screen.
@@ -35,8 +43,8 @@ type Matches struct {
 // NewMatches preselects the closest available location. Locations arrive
 // already ordered by closeness. The size stays zero until Bubble Tea reports
 // the terminal's, so nothing is drawn or accepted for a guessed size.
-func NewMatches(query string, n catalog.Navigation) Matches {
-	m := Matches{Query: query, Exact: n.Exact, Locations: n.Locations, Dark: true}
+func NewMatches(ctx context.Context, a *app.App, query string, n catalog.Navigation) Matches {
+	m := Matches{App: a, Context: ctx, Query: query, Exact: n.Exact, Locations: n.Locations, Dark: true}
 	for i, l := range m.Locations {
 		if l.Available {
 			m.Selected = i
@@ -45,6 +53,14 @@ func NewMatches(query string, n catalog.Navigation) Matches {
 	}
 	return m
 }
+
+func NewMissingMatches(ctx context.Context, a *app.App, missing *app.MissingLocation) Matches {
+	m := NewMatches(ctx, a, "", catalog.Navigation{Exact: true, Locations: []catalog.Location{missing.Location()}})
+	m.missing, m.direct = missing, true
+	return m
+}
+
+type missingRemoved struct{ err error }
 
 func (m Matches) Init() tea.Cmd { return tea.RequestBackgroundColor }
 
@@ -57,9 +73,13 @@ func (m Matches) rows() int {
 	return max(0, min(matchRows, len(m.Locations), m.Height-4))
 }
 
-// height counts the rows of the preview before padding: the title, the
-// locations, the path, and the help, or the single notice that replaces them.
 func (m Matches) height() int {
+	if m.missing != nil {
+		if m.missingFits() {
+			return lipgloss.Height(m.missingContent())
+		}
+		return 1
+	}
 	if rows := m.rows(); rows > 0 {
 		return rows + 3
 	}
@@ -73,7 +93,37 @@ func (m Matches) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Lines = max(m.Lines, m.height())
 	case tea.BackgroundColorMsg:
 		m.Dark = msg.IsDark()
+	case missingRemoved:
+		m.busy, m.Done, m.err = false, true, msg.err
+		if msg.err == nil {
+			m.completion = "Ubicación quitada del catálogo. Sigues en la carpeta actual."
+		}
+		return m, tea.Quit
 	case tea.KeyPressMsg:
+		if m.Done || m.busy {
+			return m, nil
+		}
+		if m.missing != nil {
+			switch msg.String() {
+			case "ctrl+c":
+				m.Done = true
+				return m, tea.Quit
+			case "s", "y":
+				if !m.missingFits() {
+					return m, nil
+				}
+				missing, ctx := m.missing, m.Context
+				m.busy = true
+				return m, func() tea.Msg { return missingRemoved{err: missing.Remove(ctx)} }
+			default:
+				if m.direct {
+					m.Done = true
+					return m, tea.Quit
+				}
+				m.missing = nil
+				return m, nil
+			}
+		}
 		last := len(m.Locations) - 1
 		switch msg.String() {
 		case "esc", "ctrl+c":
@@ -84,8 +134,12 @@ func (m Matches) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			l := m.Locations[m.Selected]
-			if !l.Available {
-				m.Notice = "Carpeta no disponible; elige otra ubicación."
+			if err := m.App.CheckNavigation(l); err != nil {
+				if errors.As(err, &m.missing) {
+					m.Lines = max(m.Lines, m.height())
+				} else {
+					m.Notice = err.Error()
+				}
 				return m, nil
 			}
 			m.Choice, m.Done = &l, true
@@ -128,13 +182,19 @@ func (m Matches) View() tea.View {
 // terminal's: Bubble Tea redraws a taller frame on every tick, scrolling a
 // copy of it into the shell history each time, and a frame as tall as the
 // terminal is erased from the top left corner, which tmux also copies into
-// history. The content always fits, since rows leaves a row free.
+// history.
 func (m Matches) frameLines() int {
 	return min(m.Lines, m.Height-1)
 }
 
 func (m Matches) content() string {
 	p := styles(m.Dark)
+	if m.missing != nil {
+		if !m.missingFits() {
+			return frame("Amplía el terminal · Enter/Esc cancelar", m.Width, 1)
+		}
+		return m.missingContent()
+	}
 	rows := m.rows()
 	if rows == 0 {
 		return frame("Amplía el terminal para elegir · Esc cancelar", m.Width, 1)
@@ -186,14 +246,36 @@ func (m Matches) content() string {
 	return strings.Join(lines, "\n")
 }
 
-// RunMatches returns nil when the person cancels.
+func (m Matches) missingContent() string {
+	l := m.missing.Location()
+	return wrap(strings.Join([]string{
+		"Esta carpeta ya no existe",
+		Clean(l.Project.Name) + " · " + locationTitle(l) + " · " + string(l.ID),
+		Clean(l.Path),
+		"s/y quitar del catálogo · Enter/Esc cancelar",
+	}, "\n"), min(m.Width, 100))
+}
+
+func (m Matches) missingFits() bool {
+	return m.Width >= 24 && lipgloss.Height(m.missingContent()) < m.Height
+}
+
+// RunMatches returns no choice after cancellation or cleanup.
 func RunMatches(ctx context.Context, m Matches, in io.Reader, out io.Writer) (*catalog.Location, error) {
 	model, err := tea.NewProgram(m, tea.WithContext(ctx), tea.WithInput(in), tea.WithOutput(out)).Run()
 	if err != nil {
 		return nil, err
 	}
 	m = model.(Matches)
-	return m.Choice, m.erase(out)
+	if err := m.erase(out); err != nil {
+		return nil, err
+	}
+	if m.completion != "" {
+		if _, err := fmt.Fprintln(out, m.completion); err != nil {
+			return nil, err
+		}
+	}
+	return m.Choice, m.err
 }
 
 // erase removes the final frame once the program has stopped. Bubble Tea

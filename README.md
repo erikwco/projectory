@@ -128,6 +128,8 @@ pt "Mi Tienda"
 
 Un nombre exacto con una sola ubicación entra directamente. Si el nombre solo se parece, por ejemplo con un error de tecleo, o si el proyecto tiene varias ubicaciones, aparece una lista breve debajo del prompt: **↑/↓** elige, **Enter** entra y **Esc** cancela sin cambiar de carpeta. Escribe entre comillas los nombres con espacios. Los subcomandos tienen prioridad: un proyecto llamado `add` se abre con `pt go add`.
 
+Si la carpeta registrada ya no existe, **Enter** ofrece quitar esa ubicación del catálogo. Un nombre exacto abre la confirmación directamente. **s** o **y** confirma y **Enter** o **Esc** cancela. Tu carpeta actual y las visitas no cambian. Si la carpeta reaparece antes de confirmar, se conserva el registro. Sin terminal interactivo, el error indica el comando para quitarla por ID.
+
 `pt ~` vuelve a tu carpeta personal sin abrir el catálogo.
 
 ## Worktrees y copias

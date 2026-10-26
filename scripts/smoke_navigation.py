@@ -209,6 +209,169 @@ printf '\n__NAVIGATION_LOCATION__\n'
             no_leftovers()
         print(f"PASS inline approximate preview, Enter, Esc, Ctrl+C, several locations, resize, cd, and visits in {', '.join(shells)}")
 
+        for shell in shells:
+            target = root / f"missing {shell} ' $(touch PWNED) `touch PWNED2`; [x]\ncarpeta"
+            name = f"Fantasma {shell}"
+            shell_env = {**env, "PROJECTORY_SHELL": shell, "MISSING_NAME": name, "MISSING_PATH": str(target)}
+
+            def register_target():
+                target.mkdir()
+                cli("add", str(target), "--name", name, "--label", "principal")
+                records = json.loads(cli("list", "--json").stdout)
+                shell_env["MISSING_ID"] = next(record["id"] for record in records if record["path"] == str(target))
+                return visits()
+
+            def removed_without_visits(before):
+                assert visits() == {path: count for path, count in before.items() if path != str(target)}, "cleanup changed another record or counted a visit"
+                no_leftovers()
+
+            for reference in ('"$MISSING_NAME"', 'go "$MISSING_ID"', 'go "$MISSING_PATH"'):
+                before = register_target()
+                target.rmdir()
+                code = r'''
+builtin cd -- "$ROOT"
+pt REFERENCE --db "$DB" && printf '__CHAINED__\n'
+_status=$?
+[ "$_status" -ne 0 ] || exit 70
+[ "$PWD" = "$ROOT" ] || exit 71
+printf '\n__MISSING_CANCELLED__\n'
+pt REFERENCE --db "$DB" && printf '__CHAINED__\n'
+_status=$?
+[ "$_status" -ne 0 ] || exit 72
+[ "$PWD" = "$ROOT" ] || exit 73
+printf '\n__MISSING_REMOVED__\n'
+'''.replace("REFERENCE", reference)
+                with Terminal(shell_argv(shell, code), shell_env, root, 100, 30) as terminal:
+                    terminal.expect("Esta carpeta ya no existe")
+                    terminal.expect(shell_env["MISSING_ID"])
+                    terminal.expect("Enter/Esc cancelar")
+                    assert visits() == before, "prompt changed catalog"
+                    mark = len(terminal.output)
+                    terminal.send("\r")
+                    terminal.expect("__MISSING_CANCELLED__", after=mark)
+                    terminal.expect("Esta carpeta ya no existe", after=mark)
+                    assert visits() == before, "Enter did not cancel cleanup"
+                    terminal.send("s")
+                    output = terminal.finish()
+                    assert "__MISSING_REMOVED__" in output and "__CHAINED__" not in output
+                    assert "Sigues en la carpeta actual" in output
+                    assert ALTERNATE_SCREEN not in terminal.output
+                removed_without_visits(before)
+
+            before = register_target()
+            target.rmdir()
+            code = r'''
+builtin cd -- "$ROOT"
+pt "$MISSING_NAME" --db "$DB" && printf '__CHAINED__\n'
+_status=$?
+[ "$_status" -ne 0 ] || exit 74
+[ "$PWD" = "$ROOT" ] || exit 75
+printf '\n__RESTORED_RETAINED__\n'
+'''
+            with Terminal(shell_argv(shell, code), shell_env, root, 100, 30) as terminal:
+                terminal.expect("Esta carpeta ya no existe")
+                target.mkdir()
+                terminal.send("y")
+                output = terminal.finish()
+                assert "volvió a estar disponible" in output and "__RESTORED_RETAINED__" in output and "__CHAINED__" not in output
+            assert visits() == before and target.is_dir(), "restoration was removed or visited"
+            no_leftovers()
+
+            code = r'''
+builtin cd -- "$ROOT"
+pt Fantas --db "$DB" && printf '__CHAINED__\n'
+_status=$?
+[ "$_status" -ne 0 ] || exit 76
+[ "$PWD" = "$ROOT" ] || exit 77
+printf '\n__APPROXIMATE_REMOVED__\n'
+'''
+            with Terminal(shell_argv(shell, code), shell_env, root, 100, 30) as terminal:
+                terminal.expect("Coincidencias para «Fantas»")
+                target.rmdir()
+                terminal.send("\r")
+                terminal.expect("Esta carpeta ya no existe")
+                mark = len(terminal.output)
+                terminal.send("\x1b")
+                terminal.expect("Coincidencias para", after=mark)
+                assert visits() == before, "nested Esc removed the registration"
+                mark = len(terminal.output)
+                terminal.send("\r")
+                terminal.expect("Esta carpeta ya no existe", after=mark)
+                terminal.send("s")
+                output = terminal.finish()
+                assert "__APPROXIMATE_REMOVED__" in output and "__CHAINED__" not in output
+                assert ALTERNATE_SCREEN not in terminal.output
+            removed_without_visits(before)
+
+            register_target()
+            sibling = root / f"sibling-{shell}"
+            sibling.mkdir()
+            cli("add", str(sibling), "--project", name, "--label", "copia")
+            before = visits()
+            code = r'''
+builtin cd -- "$ROOT"
+pt "$MISSING_NAME" --db "$DB" && printf '__CHAINED__\n'
+_status=$?
+[ "$_status" -ne 0 ] || exit 78
+[ "$PWD" = "$ROOT" ] || exit 79
+printf '\n__GROUP_REMOVED__\n'
+'''
+            with Terminal(shell_argv(shell, code), shell_env, root, 100, 30) as terminal:
+                terminal.expect(f"{name} · 2 ubicaciones")
+                target.rmdir()
+                terminal.send("\r")
+                terminal.expect("Esta carpeta ya no existe")
+                terminal.expect(shell_env["MISSING_ID"])
+                terminal.send("y")
+                output = terminal.finish()
+                assert "__GROUP_REMOVED__" in output and "__CHAINED__" not in output
+            removed_without_visits(before)
+            assert sibling.is_dir(), "cleanup deleted sibling files"
+            cli("remove", str(sibling), "--yes")
+
+            for view in ("list", "dash"):
+                for restore in (False, True):
+                    before = register_target()
+                    code = r'''
+builtin cd -- "$ROOT"
+pt VIEW --query "$MISSING_NAME" --db "$DB" || exit 80
+[ "$PWD" = "$ROOT" ] || exit 81
+printf '\n__BROWSER_UNCHANGED__\n'
+'''.replace("VIEW", view)
+                    with Terminal(shell_argv(shell, code), shell_env, root, 100, 30) as terminal:
+                        terminal.expect("PROJECTORY")
+                        terminal.expect(name)
+                        target.rmdir()
+                        terminal.send("\r")
+                        terminal.expect("Esta carpeta ya no existe")
+                        terminal.send("\r")
+                        terminal.read()
+                        assert visits() == before and terminal.process.poll() is None, "Browser cancel left the UI or removed the target"
+                        mark = len(terminal.output)
+                        terminal.send("\r")
+                        terminal.expect("Esta carpeta ya no existe", after=mark)
+                        terminal.resize(24, 8)
+                        terminal.expect("Amplía el terminal")
+                        terminal.send("s")
+                        terminal.read()
+                        assert visits() == before, "hidden confirmation removed the target"
+                        terminal.resize(100, 30)
+                        if restore:
+                            target.mkdir()
+                        mark = len(terminal.output)
+                        terminal.send("y")
+                        terminal.expect("volvió a estar disponible" if restore else "Ubicación quitada del catálogo", after=mark)
+                        assert terminal.process.poll() is None, "Browser cleanup closed the UI"
+                        assert visits() == (before if restore else {path: count for path, count in before.items() if path != str(target)})
+                        terminal.send("q")
+                        assert "__BROWSER_UNCHANGED__" in terminal.finish()
+                    no_leftovers()
+                    if restore:
+                        assert target.is_dir()
+                        cli("remove", shell_env["MISSING_ID"], "--yes")
+                        target.rmdir()
+        print(f"PASS missing-path cancel, cleanup, restoration, literal paths, approximate/group choosers, tiny Browser confirmations, cwd, visits, and chained-command refusal in {', '.join(shells)}")
+
         # A function loaded from 1.0.0 keeps working with this binary.
         for shell in shells:
             before = visits()

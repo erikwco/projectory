@@ -390,6 +390,13 @@ func (b Browser) pickerView() string {
 
 func (b Browser) confirmationView() string {
 	p := styles(b.Dark)
+	if b.missing != nil {
+		if !b.missingConfirmationFits() {
+			return p.Dialog.Render(box("Amplía el terminal\nEnter/Esc cancelar", b.Width, 4, p))
+		}
+		content := b.missingConfirmation()
+		return p.Dialog.Render(box(content, min(86, b.Width), lipgloss.Height(content)+2, p))
+	}
 	w := min(86, b.Width-4)
 	if b.Width < 50 {
 		w = b.Width
@@ -403,6 +410,20 @@ func (b Browser) confirmationView() string {
 	content := strings.Join(text, "\n")
 	h := min(b.Height, lipgloss.Height(content)+2)
 	return p.Dialog.Render(box(content, w, h, p))
+}
+
+func (b Browser) missingConfirmation() string {
+	l := b.missing.Location()
+	return wrap(strings.Join([]string{
+		"Esta carpeta ya no existe",
+		Clean(l.Project.Name) + " · " + locationTitle(l) + " · " + string(l.ID),
+		Clean(l.Path),
+		"s/y quitar del catálogo · Enter/Esc cancelar",
+	}, "\n"), min(86, b.Width)-4)
+}
+
+func (b Browser) missingConfirmationFits() bool {
+	return lipgloss.Height(b.missingConfirmation())+2 <= b.Height
 }
 
 func (b Browser) detailView() string {

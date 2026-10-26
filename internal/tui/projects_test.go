@@ -8,13 +8,14 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/erikwco/projectory/internal/app"
 	"github.com/erikwco/projectory/internal/catalog"
 )
 
 func multiLocationBrowser(t *testing.T, dashboard bool) Browser {
 	t.Helper()
 	project := catalog.Project{ID: "shared", Name: "DemoProject", Description: "Aplicación para la comunidad", Tags: []string{"personal"}}
-	return NewBrowser(context.Background(), nil, []catalog.Location{
+	return NewBrowser(context.Background(), &app.App{}, []catalog.Location{
 		{ID: "worktree", Project: project, Path: t.TempDir(), Label: "feature/payments", Branch: "feature/payments", Kind: catalog.Worktree, Available: true, Visits: 4},
 		{ID: "main", Project: project, Path: t.TempDir(), Label: "principal", Branch: "main", Kind: catalog.Repository, Available: true, Visits: 3},
 		{ID: "other", Project: catalog.Project{ID: "other", Name: "Projectory"}, Path: t.TempDir(), Label: "principal", Kind: catalog.Directory, Available: true, Visits: 6},
@@ -149,7 +150,7 @@ func TestUnavailableLocationRemainsVisibleAndCannotNavigate(t *testing.T) {
 	b = update(b, press(tea.KeyEnter))
 	b = update(b, press(tea.KeyDown))
 	b = update(b, press(tea.KeyEnter))
-	if b.Choice != nil || b.Mode != choosing || b.Notice == "" || len(b.Visible[0].Locations) != 2 {
+	if b.Choice != nil || b.Mode != confirming || len(b.Visible[0].Locations) != 2 {
 		t.Fatal("unavailable location must remain visible without being selected for navigation")
 	}
 }

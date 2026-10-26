@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -47,6 +48,8 @@ type Browser struct {
 	ProjectCount                int
 	Picker                      *locationPicker
 	Removing                    catalog.Location
+	missing                     *app.MissingLocation
+	cleaning                    bool
 	Selected                    int
 	DetailOffset                int
 	Choice                      *catalog.Location
@@ -137,9 +140,13 @@ func (b Browser) applyAction(action locationAction, l catalog.Location) (tea.Mod
 	}
 	switch action {
 	case openLocation:
-		info, err := os.Stat(l.Path)
-		if err != nil || !info.IsDir() {
-			b.Notice = "Carpeta no disponible. Corrige su ruta desde el dashboard."
+		if err := b.App.CheckNavigation(l); err != nil {
+			var missing *app.MissingLocation
+			if errors.As(err, &missing) && !b.Busy {
+				b.missing, b.Removing, b.Mode = missing, missing.Location(), confirming
+			} else {
+				b.Notice = err.Error()
+			}
 			return b, nil
 		}
 		b.Choice = &l
@@ -153,6 +160,7 @@ func (b Browser) applyAction(action locationAction, l catalog.Location) (tea.Mod
 		b.Form.Dark = b.Dark
 		return b, b.Form.Init()
 	case removeLocation:
+		b.missing = nil
 		b.Removing = l
 		b.Mode = confirming
 		return b, nil
@@ -270,6 +278,7 @@ func (b Browser) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return b, nil
 	case loaded:
 		b.Busy = false
+		b.cleaning = false
 		if msg.Err != nil {
 			b.Notice = msg.Err.Error()
 			if b.Mode == adding || b.Mode == editing {
@@ -344,6 +353,9 @@ func (b Browser) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key, ok := msg.(tea.KeyPressMsg); ok && (key.String() == "q" || key.String() == "ctrl+c") {
 			return b, tea.Quit
 		}
+		return b, nil
+	}
+	if b.cleaning {
 		return b, nil
 	}
 	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "f2" && !b.Busy && (b.Mode == browsing || b.Mode == searching) {
@@ -467,11 +479,23 @@ func (b Browser) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	if b.Mode == confirming {
+		if b.missing != nil && (key.String() == "s" || key.String() == "y") && !b.missingConfirmationFits() {
+			return b, nil
+		}
+		missing := b.missing
+		b.missing = nil
 		b.returnToList()
 		if key.String() == "y" || key.String() == "s" {
 			l := b.Removing
 			b.Busy = true
+			b.cleaning = missing != nil
 			return b, func() tea.Msg {
+				if missing != nil {
+					if err := missing.Remove(b.Context); err != nil {
+						return b.reload(err.Error())
+					}
+					return b.reload("Ubicación quitada del catálogo. Sigues en la carpeta actual.")
+				}
 				if err := b.App.Store.Remove(b.Context, l.ID); err != nil {
 					return loaded{Err: err}
 				}
