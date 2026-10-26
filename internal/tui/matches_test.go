@@ -421,7 +421,7 @@ func TestMatchesProgramLeavesNoRowsBehind(t *testing.T) {
 		{"shrink below the list", 10, []any{size(80, 4), press(tea.KeyEscape)}, "", 5, false},
 		{"missing cancel", 10, []any{press(tea.KeyEnter), press(tea.KeyEscape), press(tea.KeyEscape)}, "", 0, true},
 		{"missing confirm", 10, []any{press(tea.KeyEnter), press('s')}, "", 0, true},
-		{"missing resize", 10, []any{press(tea.KeyEnter), size(24, 8), size(80, 10), press('y')}, "", 0, true},
+		{"missing resize with room", 12, []any{press(tea.KeyEnter), size(24, 10), size(80, 12), press('y')}, "", 0, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
