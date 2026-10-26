@@ -2,12 +2,17 @@ package cli
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/erikwco/projectory/internal/app"
+	"github.com/erikwco/projectory/internal/catalog"
 	"github.com/erikwco/projectory/internal/store"
 )
 
@@ -15,6 +20,111 @@ type navigationCatalog struct {
 	t             *testing.T
 	dir, database string
 	paths         map[string]string
+}
+
+func TestMissingNavigationSuggestsQuotedRemovalInSameDatabase(t *testing.T) {
+	c := newNavigationCatalog(t)
+	quotedDB := filepath.Join(c.dir, "catalog ' $(touch PWNED) `touch PWNED2`; [x]\n.db")
+	if err := os.Rename(c.database, quotedDB); err != nil {
+		t.Fatal(err)
+	}
+	c.database = quotedDB
+	var locations []catalog.Location
+	output, err := c.run("list", "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(output), &locations); err != nil {
+		t.Fatal(err)
+	}
+	var l catalog.Location
+	for _, candidate := range locations {
+		if candidate.Path == c.paths["shop"] {
+			l = candidate
+		}
+	}
+	if l.ID == "" {
+		t.Fatal("missing fixture")
+	}
+	if err := os.Remove(l.Path); err != nil {
+		t.Fatal(err)
+	}
+	for _, ref := range []string{l.Project.Name, string(l.ID), l.Path} {
+		for _, prefix := range [][]string{nil, {"go"}} {
+			out, err := c.navigate(append(append([]string{}, prefix...), ref)...)
+			var missing *app.MissingLocation
+			if !errors.As(err, &missing) || !errors.Is(err, os.ErrNotExist) || out != "" {
+				t.Fatalf("missing navigation lost its cause or emitted a selection: %q %v", out, err)
+			}
+			_, command, found := strings.Cut(err.Error(), "para quitarla del catálogo: ")
+			if !found {
+				t.Fatal("missing explicit removal command:", err)
+			}
+			for _, shell := range []string{"bash", "zsh"} {
+				binary, err := exec.LookPath(shell)
+				if err != nil {
+					continue
+				}
+				cmd := exec.Command(binary, "-c", "projectory() { printf '%s\\0' \"$@\"; }; "+command)
+				cmd.Dir = c.dir
+				args, err := cmd.Output()
+				want := "remove\x00" + string(l.ID) + "\x00--yes\x00--db\x00" + c.database + "\x00"
+				if err != nil || string(args) != want {
+					t.Fatalf("%s removal command is not literal: %q %v", shell, args, err)
+				}
+			}
+		}
+	}
+	for _, name := range []string{"PWNED", "PWNED2"} {
+		if _, err := os.Stat(filepath.Join(c.dir, name)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("shell quoting executed a path: %v", err)
+		}
+	}
+	output, err = c.run("list", "--json")
+	if err != nil || !strings.Contains(output, string(l.ID)) {
+		t.Fatal("noninteractive navigation removed a location")
+	}
+}
+
+func TestFinalSelectionRechecksAfterChooser(t *testing.T) {
+	c := newNavigationCatalog(t)
+	s, err := store.Open(c.database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	a := &app.App{Store: s}
+	l, err := s.Resolve(context.Background(), c.paths["shop"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.CheckNavigation(l); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(l.Path); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{"", filepath.Join(t.TempDir(), "selection")} {
+		var out bytes.Buffer
+		cmd := New("test")
+		cmd.SetIn(strings.NewReader(""))
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		settings := &settings{SelectionFile: file}
+		err := settings.selectLocation(cmd, a, &l)
+		if !errors.Is(err, os.ErrNotExist) || out.Len() != 0 || strings.Contains(err.Error(), "--db") {
+			t.Fatalf("final check emitted a missing selection: %v %q", err, out.String())
+		}
+		if file != "" {
+			if _, err := os.Stat(file); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("final check wrote selection file")
+			}
+		}
+	}
+	l, err = s.Resolve(context.Background(), string(l.ID))
+	if err != nil || l.Visits != 0 {
+		t.Fatal("final check changed catalog")
+	}
 }
 
 // newNavigationCatalog registers fictitious projects in an isolated catalog.

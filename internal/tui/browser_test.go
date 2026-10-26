@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/erikwco/projectory/internal/app"
 	"github.com/erikwco/projectory/internal/catalog"
 )
 
@@ -20,7 +21,7 @@ func typeQuery(b Browser, text string) Browser {
 }
 
 func sampleBrowser(t *testing.T) Browser {
-	return NewBrowser(context.Background(), nil, []catalog.Location{
+	return NewBrowser(context.Background(), &app.App{}, []catalog.Location{
 		{ID: "one", Project: catalog.Project{ID: "p1", Name: "Uno", Description: "Una descripción", Tags: []string{"personal"}}, Path: t.TempDir(), Label: "principal", Kind: catalog.Directory, Available: true},
 		{ID: "two", Project: catalog.Project{ID: "p2", Name: "Dos"}, Path: t.TempDir(), Label: "principal", Kind: catalog.Directory, Available: true},
 	}, true, "", "", "name", SettingsScreen{})
@@ -327,7 +328,7 @@ func TestMissingLocationCannotBeSelected(t *testing.T) {
 	b := sampleBrowser(t)
 	b.Visible[0].Locations[0].Path = t.TempDir() + "/missing"
 	b = update(b, press(tea.KeyEnter))
-	if b.Choice != nil || b.Notice == "" {
+	if b.Choice != nil || b.Mode != confirming {
 		t.Fatal("missing directory was selected")
 	}
 }

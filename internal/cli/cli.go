@@ -28,8 +28,8 @@ type listOptions struct {
 	Plain, JSON      bool
 }
 
-// ErrCancelled reports that the person closed a prompt without choosing. The
-// command fails quietly so that `pt nombre && comando` does not continue.
+// ErrCancelled ends navigation without a choice, including after cleanup.
+// The command fails quietly so that `pt nombre && comando` does not continue.
 var ErrCancelled = errors.New("selección cancelada")
 
 func isTerminal(stream any) bool {
@@ -147,12 +147,27 @@ func settingsCommand() *cobra.Command {
 	return cmd
 }
 
-func (s *settings) selectLocation(cmd *cobra.Command, l *catalog.Location) error {
+func (s *settings) selectLocation(cmd *cobra.Command, a *app.App, l *catalog.Location) error {
 	if l == nil {
 		return nil
 	}
-	if _, err := catalog.NormalizePath(l.Path, true); err != nil {
-		return fmt.Errorf("carpeta no disponible: %w", err)
+	if err := a.CheckNavigation(*l); err != nil {
+		var missing *app.MissingLocation
+		if !errors.As(err, &missing) {
+			return err
+		}
+		if !interactive(cmd) {
+			command := "projectory remove " + shellQuote(string(l.ID)) + " --yes"
+			if s.Database != "" {
+				command += " --db " + shellQuote(s.Database)
+			}
+			return fmt.Errorf("%w; para quitarla del catálogo: %s", err, command)
+		}
+		_, err = tui.RunMatches(cmd.Context(), tui.NewMissingMatches(cmd.Context(), a, missing), cmd.InOrStdin(), cmd.ErrOrStderr())
+		if err != nil {
+			return err
+		}
+		return ErrCancelled
 	}
 	if s.SelectionFile != "" {
 		database := s.Database
@@ -174,6 +189,10 @@ func (s *settings) selectLocation(cmd *cobra.Command, l *catalog.Location) error
 		fmt.Fprintln(cmd.ErrOrStderr(), "Para que pt cambie de carpeta, activa su función en este shell:\n  zsh:  eval \"$(projectory init zsh)\"\n  bash: eval \"$(projectory init bash)\"")
 	}
 	return err
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func (s *settings) list(cmd *cobra.Command, options *listOptions, dash bool) error {
@@ -214,7 +233,7 @@ func (s *settings) list(cmd *cobra.Command, options *listOptions, dash bool) err
 		if err != nil {
 			return err
 		}
-		return s.selectLocation(cmd, selection)
+		return s.selectLocation(cmd, a, selection)
 	})
 }
 
@@ -349,20 +368,20 @@ func (s *settings) navigate(cmd *cobra.Command, ref string) error {
 		case len(found.Locations) == 0:
 			return fmt.Errorf("%w: ningún proyecto coincide con %q", store.ErrNotFound, ref)
 		case found.Exact && len(found.Locations) == 1:
-			return s.selectLocation(cmd, &found.Locations[0])
+			return s.selectLocation(cmd, a, &found.Locations[0])
 		case !interactive(cmd) && found.Exact:
 			return fmt.Errorf("%q tiene varias ubicaciones; usa su ID, ruta o proyecto/etiqueta (pt list --plain los muestra)", ref)
 		case !interactive(cmd):
 			return fmt.Errorf("%q no es un nombre exacto; coincide con %s. Usa el nombre exacto, el ID o la ruta", ref, projectNames(found.Locations))
 		}
-		choice, err := tui.RunMatches(ctx, tui.NewMatches(ref, found), cmd.InOrStdin(), cmd.ErrOrStderr())
+		choice, err := tui.RunMatches(ctx, tui.NewMatches(ctx, a, ref, found), cmd.InOrStdin(), cmd.ErrOrStderr())
 		if err != nil {
 			return err
 		}
 		if choice == nil {
 			return ErrCancelled
 		}
-		return s.selectLocation(cmd, choice)
+		return s.selectLocation(cmd, a, choice)
 	})
 }
 
